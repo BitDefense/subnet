@@ -163,3 +163,7 @@ testing/
 
 # Editors
 .vscode/settings.json
+
+skills-lock.json
+.agent/
+.agents/
