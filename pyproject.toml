@@ -1,0 +1,28 @@
+[project]
+name = "bitdefense"
+version = "0.1.0"
+description = "Decentralized, permissionless security protocol providing real-time on-chain analysis, detection and invariants monitoring."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Aleksei Gubin" }
+]
+dependencies = [
+    "bittensor>=10.0.0",
+    "starlette>=0.30.0",
+    "pydantic>=2",
+    "rich>=13",
+    "pytest>=8",
+    "torch>=2",
+    "numpy>=2.0.1",
+    "setuptools>=68",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0.0",
+]

@@ -22,7 +22,6 @@ import pathlib
 from os import path
 from io import open
 from setuptools import setup, find_packages
-from pkg_resources import parse_requirements
 
 
 def read_requirements(path):
@@ -31,6 +30,9 @@ def read_requirements(path):
         processed_requirements = []
 
         for req in requirements:
+            # Skip empty lines and comments
+            if not req or req.startswith("#"):
+                continue
             # For git or other VCS links
             if req.startswith("git+") or "@" in req:
                 pkg_name = re.search(r"(#egg=)([\w\-_]+)", req)
@@ -72,7 +74,7 @@ setup(
     include_package_data=True,
     author_email="",
     license="MIT",
-    python_requires=">=3.8",
+    python_requires=">=3.10",
     install_requires=requirements,
     classifiers=[
         "Development Status :: 3 - Alpha",

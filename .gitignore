@@ -167,3 +167,7 @@ testing/
 skills-lock.json
 .agent/
 .agents/
+
+GEMINI.md
+wallets/
+.wallets_setup
