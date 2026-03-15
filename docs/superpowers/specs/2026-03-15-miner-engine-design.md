@@ -40,4 +40,4 @@ We will implement an `InvariantsCheckEngine` interface and integrate it into the
 
 ## Error Handling & Edge Cases
 *   **Empty Invariants**: If `challenge.invariants` is empty, the engine should return an empty list `[]`.
-*   **Engine Failure**: The miner's `forward` function should wrap the engine execution in a basic `try/except` block. If the engine crashes unexpectedly, it should log the error and potentially return `None` or an empty list to avoid crashing the entire miner process.
+*   **Engine Failure**: The miner's `forward` function should wrap the engine execution in a basic `try/except` block. If the engine crashes unexpectedly, it should log the error and return an empty list `[]` to avoid crashing the entire miner process.

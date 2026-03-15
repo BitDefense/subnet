@@ -50,6 +50,7 @@ class Invariant(BaseModel):
     type: str
     target: str
     storage: str
+    storage_slot_type: str
 
 class Challenge(bt.Synapse):
     """
