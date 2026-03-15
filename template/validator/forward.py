@@ -17,46 +17,87 @@
 # DEALINGS IN THE SOFTWARE.
 
 import time
+import json
+import random
+import os
 import bittensor as bt
+from typing import List
 
-from template.protocol import Challenge
+from template.protocol import Challenge, Transaction, TransactionPayload, Invariant
 from template.validator.reward import get_rewards
 from template.utils.uids import get_random_uids
+
+
+def load_challenge_from_json(file_path: str = "challenge_example.json") -> Challenge:
+    """
+    Loads a challenge from a JSON file and injects default storage_slot_type if missing.
+    """
+    # Use absolute path relative to project root if relative path provided
+    if not os.path.isabs(file_path):
+        root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        file_path = os.path.join(root_dir, file_path)
+        
+    with open(file_path, "r") as f:
+        data = json.load(f)
+    
+    # Inject storage_slot_type: "uint256" if missing in invariants
+    for inv in data.get("invariants", []):
+        if "storage_slot_type" not in inv:
+            inv["storage_slot_type"] = "uint256"
+            
+    # Map to Pydantic models
+    payload_data = data["tx"]["payload"]
+    payload = TransactionPayload(**payload_data)
+    
+    tx = Transaction(
+        hash=data["tx"]["hash"],
+        payload=payload
+    )
+    
+    invariants = [Invariant(**inv) for inv in data["invariants"]]
+    
+    return Challenge(
+        chain_id=str(data["chain_id"]),
+        block_number=str(data["block_number"]),
+        tx=tx,
+        invariants=invariants
+    )
 
 
 async def forward(self):
     """
     The forward function is called by the validator every time step.
-
-    It is responsible for querying the network and scoring the responses.
-
-    Args:
-        self (:obj:`bittensor.neuron.Neuron`): The neuron object which contains all the necessary state for the validator.
-
+    It picks 3, 5, 7, or 9 miners and queries them with a challenge.
     """
-    # TODO(developer): Define how the validator selects a miner to query, how often, etc.
-    # get_random_uids is an example method, but you can replace it with your own.
-    miner_uids = get_random_uids(self, k=self.config.neuron.sample_size)
+    # 1. Randomly choose k from [3, 5, 7, 9]
+    k = random.choice([3, 5, 7, 9])
+    
+    # 2. Get k random miner UIDs
+    miner_uids = get_random_uids(self, k=k)
+    bt.logging.info(f"Querying {len(miner_uids)} miners (k={k})")
 
-    # The dendrite client queries the network.
+    # 3. Load challenge from JSON
+    try:
+        challenge = load_challenge_from_json("challenge_example.json")
+    except Exception as e:
+        bt.logging.error(f"Failed to load challenge from JSON: {e}")
+        return
+
+    # 4. Query the network in parallel
     responses = await self.dendrite(
-        # Send the query to selected miner axons in the network.
         axons=[self.metagraph.axons[uid] for uid in miner_uids],
-        # Construct a dummy query. This simply contains a single integer.
-        synapse=Challenge(),
-        # All responses have the deserialize function called on them before returning.
-        # You are encouraged to define your own deserialization function.
+        synapse=challenge,
+        timeout=10.0,
         deserialize=True,
     )
 
-    # Log the results for monitoring purposes.
     bt.logging.info(f"Received responses: {responses}")
 
-    # TODO(developer): Define how the validator scores responses.
-    # Adjust the scores based on responses from miners.
+    # 5. Score responses
+    # responses is a list of results (List[int] or [] if failed)
     rewards = get_rewards(self, query=self.step, responses=responses)
 
     bt.logging.info(f"Scored responses: {rewards}")
-    # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
+    
+    # 6. Update scores
     self.update_scores(rewards, miner_uids)
-    time.sleep(5)
