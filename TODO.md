@@ -25,7 +25,7 @@ This document outlines the necessary steps to transition from the Bittensor Subn
 ## 2. Protocol Definition
 **Goal:** Define the data structures for communication between miners and validators.
 
-- [ ] **Synapse Design (`template/protocol.py`):**
+- [x] **Synapse Design (`template/protocol.py`):**
     - Rewrite the `Dummy` class (or create new classes) inheriting from `bt.Synapse`.
     - Define the input fields (filled by the validator) and output fields (filled by the miner).
     - Implement a `deserialize` method to extract the response data.
