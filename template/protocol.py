@@ -19,57 +19,53 @@
 import typing
 import bittensor as bt
 
-# TODO(developer): Rewrite with your protocol definition.
+from pydantic import BaseModel, Field, ConfigDict
 
-# This is the protocol for the dummy miner and validator.
-# It is a simple request-response protocol where the validator sends a request
-# to the miner, and the miner responds with a dummy response.
+class TransactionPayload(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    
+    type: str
+    chainId: str
+    nonce: str
+    gasPrice: str
+    gas: str
+    to: str
+    value: str
+    input: str
+    r: str
+    s: str
+    v: str
+    hash: str
+    blockHash: str
+    blockNumber: str
+    transactionIndex: str
+    from_address: str = Field(alias="from")
 
-# ---- miner ----
-# Example usage:
-#   def dummy( synapse: Dummy ) -> Dummy:
-#       synapse.dummy_output = synapse.dummy_input + 1
-#       return synapse
-#   axon = bt.axon().attach( dummy ).serve(netuid=...).start()
+class Transaction(BaseModel):
+    hash: str
+    payload: TransactionPayload
 
-# ---- validator ---
-# Example usage:
-#   dendrite = bt.dendrite()
-#   dummy_output = dendrite.query( Dummy( dummy_input = 1 ) )
-#   assert dummy_output == 2
+class Invariant(BaseModel):
+    contract: str
+    type: str
+    target: str
+    storage: str
 
-
-class Dummy(bt.Synapse):
+class Challenge(bt.Synapse):
     """
-    A simple dummy protocol representation which uses bt.Synapse as its base.
-    This protocol helps in handling dummy request and response communication between
-    the miner and the validator.
-
-    Attributes:
-    - dummy_input: An integer value representing the input request sent by the validator.
-    - dummy_output: An optional integer value which, when filled, represents the response from the miner.
+    The BitDefense Challenge protocol representation.
     """
+    chain_id: str
+    tx: Transaction
+    invariants: typing.List[Invariant]
 
-    # Required request input, filled by sending dendrite caller.
-    dummy_input: int
+    output: typing.Optional[typing.List[int]] = None
 
-    # Optional request output, filled by receiving axon.
-    dummy_output: typing.Optional[int] = None
-
-    def deserialize(self) -> int:
+    def deserialize(self) -> typing.List[int]:
         """
-        Deserialize the dummy output. This method retrieves the response from
-        the miner in the form of dummy_output, deserializes it and returns it
-        as the output of the dendrite.query() call.
-
-        Returns:
-        - int: The deserialized response, which in this case is the value of dummy_output.
-
-        Example:
-        Assuming a Dummy instance has a dummy_output value of 5:
-        >>> dummy_instance = Dummy(dummy_input=4)
-        >>> dummy_instance.dummy_output = 5
-        >>> dummy_instance.deserialize()
-        5
+        Deserialize the challenge output. 
+        Returns an empty list if output is None.
         """
-        return self.dummy_output
+        if self.output is None:
+            return []
+        return self.output
