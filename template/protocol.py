@@ -57,6 +57,7 @@ class Challenge(bt.Synapse):
     The BitDefense Challenge protocol representation.
     """
     chain_id: str
+    block_number: str
     tx: Transaction
     invariants: typing.List[Invariant]
 
