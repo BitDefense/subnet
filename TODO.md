@@ -33,7 +33,7 @@ This document outlines the necessary steps to transition from the Bittensor Subn
 ## 3. Miner Implementation
 **Goal:** Define how your miners process requests and provide value.
 
-- [ ] **Core Logic (`neurons/miner.py`):**
+- [x] **Core Logic (`neurons/miner.py`):**
     - Implement the `forward` method to process incoming synapses according to your protocol.
     - (Optional) Add custom initialization in `__init__` for your specific use case.
 - [ ] **Security & Management:**
