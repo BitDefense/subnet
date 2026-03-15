@@ -26,7 +26,7 @@ We will implement the protocol definition in `template/protocol.py`. We will use
         *   `output`: `Optional[List[int]]` = None. The miner sets this field.
 
 **3. Deserialization**
-The `Challenge.deserialize()` method will simply return the `output` field (the `List[int]`), making it easy for the validator to grab the results.
+The `Challenge.deserialize()` method will return the `output` field (the `List[int]`). If the `output` is `None` (e.g., due to a miner error or timeout), it should return an empty list `[]` to ensure consistent typing for the validator.
 
 ## Data Flow
 1.  **Validator** constructs `TransactionPayload`, `Transaction`, and a list of `Invariant` objects.
@@ -34,9 +34,14 @@ The `Challenge.deserialize()` method will simply return the `output` field (the 
 3.  **Validator** queries the **Miner**'s dendrite with the `Challenge` synapse.
 4.  **Miner** receives the `Challenge` synapse.
 5.  **Miner** inspects `tx.payload` and `invariants`.
-6.  **Miner** evaluates the rules and populates `Challenge.output` with a list of integers (e.g., `[1, 0, 1]`).
+6.  **Miner** evaluates the rules and populates `Challenge.output` with a list of integers (e.g., `[1, 0, 1]`). If the miner encounters an error (e.g., malformed payload or unsupported invariant type), it should leave `output` as `None` or return an empty list.
 7.  **Miner** returns the modified `Challenge` synapse.
 8.  **Validator** receives the response and calls `Challenge.deserialize()` to get the `List[int]` result.
+
+## Error Handling & Edge Cases
+*   **Miner Timeout/Failure:** If the miner fails to respond or times out, the `output` will remain `None`. The validator's `deserialize()` method will convert this to an empty list `[]`.
+*   **Malformed Data:** If the miner receives a transaction payload missing expected fields, Pydantic's strict typing will automatically reject the request before it reaches the miner's core logic, resulting in a failed synapse call (handled as a timeout/failure by the validator).
+*   **Unsupported Invariants:** If a miner receives an invariant type it doesn't recognize, it should mark that specific invariant as failed (0) or return no results, depending on the strictness of the implementation.
 
 ## Trade-offs
 *   **Why custom Pydantic models instead of raw Web3 types?** Network serialization. Bittensor transmits data as JSON via Pydantic. Web3 library types (like `HexBytes` or specific custom objects) often cause serialization failures across the wire. Explicit string-based Pydantic models guarantee successful transmission and provide clear typing for IDEs.
