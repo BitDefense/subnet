@@ -25,6 +25,8 @@ import template
 
 # import base miner class which takes care of most of the boilerplate
 from template.base.miner import BaseMinerNeuron
+from template.protocol import Challenge
+from template.engine.mock import MockSafeOnlyInvariantsCheckEngine
 
 
 class Miner(BaseMinerNeuron):
@@ -38,13 +40,24 @@ class Miner(BaseMinerNeuron):
 
     def __init__(self, config=None):
         super(Miner, self).__init__(config=config)
+        self.engine = MockSafeOnlyInvariantsCheckEngine()
 
-        # TODO(developer): Anything specific to your use case you can do here
+    async def forward(self, synapse: Challenge) -> Challenge:
+        """
+        Processes the incoming 'Challenge' synapse by performing invariant checks.
 
-    async def forward(
-        self, synapse: template.protocol.Challenge
-    ) -> template.protocol.Challenge:
-        # TODO(developer): Replace with actual implementation logic.
+        Args:
+            synapse (template.protocol.Challenge): The synapse object containing the transaction and invariants.
+
+        Returns:
+            template.protocol.Challenge: The synapse object with the 'output' field set.
+        """
+        try:
+            synapse.output = self.engine.execute_checks(synapse)
+        except Exception as e:
+            bt.logging.error(f"Engine failed to execute checks: {e}")
+            synapse.output = []
+            
         return synapse
 
     async def blacklist(
