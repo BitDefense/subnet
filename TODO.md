@@ -43,7 +43,7 @@ This document outlines the necessary steps to transition from the Bittensor Subn
 ## 4. Validator Logic
 **Goal:** Define how your validators query miners and distribute rewards.
 
-- [ ] **Query Strategy (`template/validator/forward.py`):**
+- [x] **Query Strategy (`template/validator/forward.py`):**
     - Define how the validator selects miners to query (e.g., random sample, top-performing).
     - Determine the frequency and timing of queries.
 - [ ] **Scoring & Rewards (`template/validator/reward.py`):**
