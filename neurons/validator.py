@@ -45,6 +45,12 @@ class Validator(BaseValidatorNeuron):
         self.load_state()
 
         # TODO(developer): Anything specific to your use case you can do here
+        self.miner_stats = {}
+
+    def reset_miner_stats(self):
+        """Resets the miner statistics for the next epoch."""
+        bt.logging.info("Resetting miner stats for the new epoch.")
+        self.miner_stats = {}
 
     async def forward(self):
         """
@@ -55,7 +61,11 @@ class Validator(BaseValidatorNeuron):
         - Rewarding the miners
         - Updating the scores
         """
-        # TODO(developer): Rewrite this function based on your protocol definition.
+        # Check if we should reset stats (end of epoch)
+        # self.step is incremented in BaseValidatorNeuron.run after concurrent_forward
+        if self.step > 0 and self.step % self.config.neuron.epoch_length == 0:
+            self.reset_miner_stats()
+
         return await forward(self)
 
 
