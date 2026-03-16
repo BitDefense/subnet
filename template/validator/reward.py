@@ -15,40 +15,68 @@
 # THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
+
 import numpy as np
 from typing import List
 import bittensor as bt
 
+# Initial Scoring Parameters
+ALPHA = 1.0  # Throughput exponent
+BETA = 1.0   # Accuracy exponent
+GAMMA = 1.0  # Latency exponent
+T_TARGET = 5000.0  # Target latency in ms
 
-def reward(query: int, response: int) -> float:
-    """
-    Reward the miner response to the dummy request. This method returns a reward
-    value for the miner, which is used to update the miner's score.
 
-    Returns:
-    - float: The reward value for the miner.
+def reward(uid_stats: dict) -> float:
     """
-    bt.logging.info(
-        f"In rewards, query val: {query}, response val: {response}, rewards val: {1.0 if response == query * 2 else 0}"
-    )
-    return 1.0 if response == query * 2 else 0
+    Reward calculation based on the cumulative stats of a miner.
+    S_i = (N_i)^alpha * (A_i)^beta * (T_target / L_99,i)^gamma
+    """
+    processed_tx_hashes = uid_stats.get("processed_tx_hashes", set())
+    true_positives = uid_stats.get("true_positives", 0)
+    total_tasks = uid_stats.get("total_tasks", 0)
+    latencies = uid_stats.get("latencies", [])
+
+    # 1. Throughput (N_i)
+    n_i = len(processed_tx_hashes)
+
+    # 2. Accuracy (A_i)
+    a_i = true_positives / total_tasks if total_tasks > 0 else 0.0
+
+    # 3. L99 Latency (L_99,i)
+    if not latencies:
+        l_99 = T_TARGET  # Default multiplier to 1.0 if no latencies recorded
+    else:
+        # latencies are in seconds, formula expects ms (or consistent units)
+        # Assuming latencies in stats are in seconds (standard dendrite output)
+        l_99 = np.percentile(latencies, 99) * 1000.0
+
+    # Avoid division by zero for latency
+    if l_99 <= 0:
+        l_99 = 1.0
+
+    # Scoring Formula
+    score = (n_i**ALPHA) * (a_i**BETA) * ((T_TARGET / l_99) ** GAMMA)
+
+    return float(score)
 
 
 def get_rewards(
     self,
-    query: int,
-    responses: List[float],
+    miner_uids: List[int],
 ) -> np.ndarray:
     """
-    Returns an array of rewards for the given query and responses.
+    Returns an array of rewards for the given miner UIDs based on their epoch statistics.
 
     Args:
-    - query (int): The query sent to the miner.
-    - responses (List[float]): A list of responses from the miner.
+    - miner_uids (List[int]): A list of miner UIDs.
 
     Returns:
-    - np.ndarray: An array of rewards for the given query and responses.
+    - np.ndarray: An array of rewards for the given miner UIDs.
     """
-    # Get all the reward results by iteratively calling your reward() function.
+    rewards = []
+    for uid in miner_uids:
+        uid_stats = self.miner_stats.get(uid, {})
+        rewards.append(reward(uid_stats))
 
-    return np.array([reward(query, response) for response in responses])
+    return np.array(rewards)

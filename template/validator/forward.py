@@ -21,7 +21,8 @@ import json
 import random
 import os
 import bittensor as bt
-from typing import List
+import numpy as np
+from typing import List, Dict, Any
 
 from template.protocol import Challenge, Transaction, TransactionPayload, Invariant
 from template.validator.reward import get_rewards
@@ -84,20 +85,71 @@ async def forward(self):
         return
 
     # 4. Query the network in parallel
-    responses = await self.dendrite(
+    synapses = await self.dendrite(
         axons=[self.metagraph.axons[uid] for uid in miner_uids],
         synapse=challenge,
         timeout=10.0,
-        deserialize=True,
+        deserialize=False,
     )
 
-    bt.logging.info(f"Received responses: {responses}")
+    # 5. Process responses and update stats
+    num_invariants = len(challenge.invariants)
+    responses = [syn.deserialize() for syn in synapses]
+    latencies = [syn.dendrite.process_time for syn in synapses]
 
-    # 5. Score responses
-    # responses is a list of results (List[int] or [] if failed)
-    rewards = get_rewards(self, query=self.step, responses=responses)
+    # Calculate Consensus for each invariant
+    ground_truth = []
+    for i in range(num_invariants):
+        votes = {0: 0, 1: 0}
+        for resp in responses:
+            if resp and len(resp) > i:
+                vote = resp[i]
+                if vote in votes:
+                    votes[vote] += 1
+        
+        # Determine 66% consensus
+        total_votes = sum(votes.values())
+        consensus_status = None
+        if total_votes > 0:
+            for status, count in votes.items():
+                if count / total_votes >= 0.66:
+                    consensus_status = status
+                    break
+        ground_truth.append(consensus_status)
+
+    # Update Miner Stats
+    for idx, uid in enumerate(miner_uids):
+        if uid not in self.miner_stats:
+            self.miner_stats[uid] = {
+                "processed_tx_hashes": set(),
+                "true_positives": 0,
+                "total_tasks": 0,
+                "latencies": []
+            }
+        
+        stats = self.miner_stats[uid]
+        resp = responses[idx]
+        latency = latencies[idx]
+
+        # Update throughput
+        if resp: # Miner responded
+            stats["processed_tx_hashes"].add(challenge.tx.hash)
+            
+            # Update latencies
+            if latency is not None:
+                stats["latencies"].append(latency)
+            
+            # Update accuracy based on consensus
+            for i in range(num_invariants):
+                if len(resp) > i:
+                    stats["total_tasks"] += 1
+                    if ground_truth[i] is not None and resp[i] == ground_truth[i]:
+                        stats["true_positives"] += 1
+
+    # 6. Score responses based on cumulative epoch stats
+    rewards = get_rewards(self, miner_uids=miner_uids)
 
     bt.logging.info(f"Scored responses: {rewards}")
     
-    # 6. Update scores
+    # 7. Update scores
     self.update_scores(rewards, miner_uids)

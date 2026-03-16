@@ -46,10 +46,10 @@ This document outlines the necessary steps to transition from the Bittensor Subn
 - [x] **Query Strategy (`template/validator/forward.py`):**
     - Define how the validator selects miners to query (e.g., random sample, top-performing).
     - Determine the frequency and timing of queries.
-- [ ] **Scoring & Rewards (`template/validator/reward.py`):**
+- [x] **Scoring & Rewards (`template/validator/reward.py`):**
     - Implement the `reward` function to evaluate a single miner response.
     - Update `get_rewards` to process all responses for a given query.
-- [ ] **Main Loop (`neurons/validator.py`):**
+- [x] **Main Loop (`neurons/validator.py`):**
     - (Optional) Add custom initialization in `__init__`.
     - Refine the `forward` pass to integrate your protocol and reward logic.
 
