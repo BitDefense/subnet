@@ -84,12 +84,12 @@ class BaseNeuron(ABC):
             self.subtensor = MockSubtensor(
                 self.config.netuid, wallet=self.wallet
             )
-            self.metagraph = MockMetagraph(
-                self.config.netuid, subtensor=self.subtensor
-            )
+            self.metagraph = self.subtensor.metagraph(self.config.netuid)
         else:
             self.wallet = bt.Wallet(config=self.config)
-            self.subtensor = bt.Subtensor(config=self.config)
+            # Use AsyncSubtensor
+            from bittensor.core.async_subtensor import AsyncSubtensor
+            self.subtensor = AsyncSubtensor(config=self.config)
             self.metagraph = self.subtensor.metagraph(self.config.netuid)
 
         bt.logging.info(f"Wallet: {self.wallet}")
