@@ -24,7 +24,7 @@ import bittensor as bt
 ALPHA = 1.0  # Throughput exponent
 BETA = 1.0   # Accuracy exponent
 GAMMA = 1.0  # Latency exponent
-T_TARGET = 5000.0  # Target latency in ms
+T_TARGET_MS = 5000.0  # Target latency in ms
 
 
 def reward(uid_stats: dict) -> float:
@@ -45,7 +45,7 @@ def reward(uid_stats: dict) -> float:
 
     # 3. L99 Latency (L_99,i)
     if not latencies:
-        l_99 = T_TARGET  # Default multiplier to 1.0 if no latencies recorded
+        l_99 = T_TARGET_MS  # Default multiplier to 1.0 if no latencies recorded
     else:
         # latencies are in seconds, formula expects ms (or consistent units)
         # Assuming latencies in stats are in seconds (standard dendrite output)
@@ -56,7 +56,7 @@ def reward(uid_stats: dict) -> float:
         l_99 = 1.0
 
     # Scoring Formula
-    score = (n_i**ALPHA) * (a_i**BETA) * ((T_TARGET / l_99) ** GAMMA)
+    score = (n_i**ALPHA) * (a_i**BETA) * ((T_TARGET_MS / l_99) ** GAMMA)
 
     return float(score)
 

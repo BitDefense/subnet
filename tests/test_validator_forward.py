@@ -12,10 +12,9 @@ async def test_forward_consensus_and_stats():
     # Setup mock responses
     inv1 = Invariant(contract="0x1", type="mint", target="100", storage="0x0", storage_slot_type="uint256")
     payload = TransactionPayload(
-        type="0x0", chainId="0x01", nonce="0x47", gasPrice="0x2206f00",
+        type="0x0", chain_id="0x01", nonce="0x47", gas_price="0x2206f00",
         gas="0x45089", to="0x81d4", value="0x0", input="0x57ec",
         r="0xc30a", s="0x325f", v="0x14985", hash="0x0",
-        blockHash="0x0", blockNumber="0x0", transactionIndex="0x0",
         from_address="0x3eeb"
     )
     tx = Transaction(hash="0xabc123", payload=payload)

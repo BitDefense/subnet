@@ -1,6 +1,6 @@
 {
-    "chain_id": 1,
-    "block_number": 24642610,
+    "chainId": 1,
+    "blockNumber": 24642610,
     "tx": {
         "hash": "0x473e900b6e36bb66406fcd82e20ac86b85d7e30a278e833a685de260773e041f",
         "payload": {

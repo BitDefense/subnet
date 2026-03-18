@@ -22,6 +22,7 @@ import numpy as np
 import asyncio
 import argparse
 import threading
+import time
 import bittensor as bt
 
 from typing import List, Union
@@ -156,6 +157,8 @@ class BaseValidatorNeuron(BaseNeuron):
                 self.sync()
 
                 self.step += 1
+                time.sleep(1)
+
 
         # If someone intentionally stops the validator, it'll safely terminate operations.
         except KeyboardInterrupt:
@@ -279,6 +282,7 @@ class BaseValidatorNeuron(BaseNeuron):
         )
         if result is True:
             bt.logging.info("set_weights on chain successfully!")
+            self.last_set_weights_block = self.block
         else:
             bt.logging.error("set_weights failed", msg)
 

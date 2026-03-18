@@ -47,8 +47,24 @@ def load_challenge_from_json(file_path: str = "challenge_example.json") -> Chall
             inv["storage_slot_type"] = "uint256"
             
     # Map to Pydantic models
-    payload_data = data["tx"]["payload"]
-    payload = TransactionPayload(**payload_data)
+    p = data["tx"]["payload"]
+    payload = TransactionPayload(
+        type=p["type"],
+        chain_id=p["chainId"],
+        nonce=p["nonce"],
+        gas_price=p["gasPrice"],
+        max_fee_per_gas=p.get("maxFeePerGas"),
+        max_priority_fee_per_gas=p.get("maxPriorityFeePerGas"),
+        gas=p["gas"],
+        to=p["to"],
+        value=p["value"],
+        input=p["input"],
+        r=p["r"],
+        s=p["s"],
+        v=p["v"],
+        hash=p["hash"],
+        from_address=p.get("from") or p.get("fromAddress") or p.get("from_address")
+    )
     
     tx = Transaction(
         hash=data["tx"]["hash"],
@@ -58,8 +74,8 @@ def load_challenge_from_json(file_path: str = "challenge_example.json") -> Chall
     invariants = [Invariant(**inv) for inv in data["invariants"]]
     
     return Challenge(
-        chain_id=str(data["chain_id"]),
-        block_number=str(data["block_number"]),
+        chain_id=str(data["chainId"]),
+        block_number=str(data["blockNumber"]),
         tx=tx,
         invariants=invariants
     )
@@ -71,7 +87,7 @@ async def forward(self):
     It picks 3, 5, 7, or 9 miners and queries them with a challenge.
     """
     # 1. Randomly choose k from [3, 5, 7, 9]
-    k = random.choice([3, 5, 7, 9])
+    k = random.choice([1, 2])
     
     # 2. Get k random miner UIDs
     miner_uids = get_random_uids(self, k=k)
@@ -84,11 +100,13 @@ async def forward(self):
         bt.logging.error(f"Failed to load challenge from JSON: {e}")
         return
 
+    bt.logging.debug(f"Sending Challenge: {challenge.tx.hash}")
+
     # 4. Query the network in parallel
     synapses = await self.dendrite(
         axons=[self.metagraph.axons[uid] for uid in miner_uids],
         synapse=challenge,
-        timeout=10.0,
+        # timeout=10.0,
         deserialize=False,
     )
 
@@ -97,6 +115,9 @@ async def forward(self):
     responses = [syn.deserialize() for syn in synapses]
     latencies = [syn.dendrite.process_time for syn in synapses]
 
+    bt.logging.debug(f"Responses: {responses}")
+    bt.logging.debug(f"Latencies: {latencies}")
+    
     # Calculate Consensus for each invariant
     ground_truth = []
     for i in range(num_invariants):
@@ -112,10 +133,12 @@ async def forward(self):
         consensus_status = None
         if total_votes > 0:
             for status, count in votes.items():
-                if count / total_votes >= 0.66:
+                if count / total_votes >= 0.60:
                     consensus_status = status
                     break
         ground_truth.append(consensus_status)
+
+    bt.logging.debug(f"Ground Truth: {ground_truth}")
 
     # Update Miner Stats
     for idx, uid in enumerate(miner_uids):

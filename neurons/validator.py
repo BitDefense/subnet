@@ -63,8 +63,8 @@ class Validator(BaseValidatorNeuron):
         """
         # Check if we should reset stats (end of epoch)
         # self.step is incremented in BaseValidatorNeuron.run after concurrent_forward
-        if self.step > 0 and self.step % self.config.neuron.epoch_length == 0:
-            self.reset_miner_stats()
+        # if self.step > 0 and self.step % self.config.neuron.epoch_length == 0:
+        #     self.reset_miner_stats()
 
         return await forward(self)
 

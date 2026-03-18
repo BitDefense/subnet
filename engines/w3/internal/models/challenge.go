@@ -10,8 +10,8 @@ import (
 )
 
 type Challenge struct {
-	ChainID     *big.Int     `json:"chain_id"`
-	BlockNumber *big.Int     `json:"block_number"`
+	ChainID     *big.Int     `json:"chainId"`
+	BlockNumber *big.Int     `json:"blockNumber"`
 	Tx          *Transaction `json:"tx"`
 	Invariants  []Invariant  `json:"invariants"`
 }
@@ -37,12 +37,12 @@ type Transaction struct {
 
 type EthereumTransactionPayload struct {
 	Type                 *hexutil.Big   `json:"type"`
-	ChainID              *hexutil.Big   `json:"chain_id"`
+	ChainID              *hexutil.Big   `json:"chainId"`
 	Nonce                *hexutil.Big   `json:"nonce"`
-	GasPrice             *hexutil.Big   `json:"gas_price"`
+	GasPrice             *hexutil.Big   `json:"gasPrice"`
 	Gas                  *hexutil.Big   `json:"gas"`
-	MaxFeePerGas         *hexutil.Big   `json:"max_fee_per_gas"`
-	MaxPriorityFeePerGas *hexutil.Big   `json:"max_priority_fee_per_gas"`
+	MaxFeePerGas         *hexutil.Big   `json:"maxFeePerGas"`
+	MaxPriorityFeePerGas *hexutil.Big   `json:"maxPriorityFeePerGas"`
 	To                   common.Address `json:"to"`
 	Value                *hexutil.Big   `json:"value"`
 	Input                hexutil.Bytes  `json:"input"`
@@ -97,7 +97,7 @@ type Invariant struct {
 	Type            string         `json:"type"`
 	Target          *big.Int       `json:"target"`
 	Storage         common.Hash    `json:"storage"`
-	StorageSlotType string         `json:"storage_slot_type"`
+	StorageSlotType string         `json:"slotType"`
 }
 
 type InvariantIndex struct {
