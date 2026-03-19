@@ -209,6 +209,13 @@ def add_validator_args(cls, parser):
     )
 
     parser.add_argument(
+        "--neuron.set_weights_timeout",
+        type=int,
+        help="The timeout for setting weights on the chain in seconds.",
+        default=90,
+    )
+
+    parser.add_argument(
         "--neuron.moving_average_alpha",
         type=float,
         help="Moving average alpha parameter, how much to add of the new observation.",

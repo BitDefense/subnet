@@ -17,6 +17,7 @@
 
 import copy
 import typing
+import asyncio
 
 import bittensor as bt
 
@@ -84,12 +85,12 @@ class BaseNeuron(ABC):
             self.subtensor = MockSubtensor(
                 self.config.netuid, wallet=self.wallet
             )
-            self.metagraph = MockMetagraph(
-                self.config.netuid, subtensor=self.subtensor
-            )
+            self.metagraph = self.subtensor.metagraph(self.config.netuid)
         else:
             self.wallet = bt.Wallet(config=self.config)
-            self.subtensor = bt.Subtensor(config=self.config)
+            # Use AsyncSubtensor
+            from bittensor.core.async_subtensor import AsyncSubtensor
+            self.subtensor = AsyncSubtensor(config=self.config)
             self.metagraph = self.subtensor.metagraph(self.config.netuid)
 
         bt.logging.info(f"Wallet: {self.wallet}")
@@ -117,7 +118,7 @@ class BaseNeuron(ABC):
     def run(self):
         ...
 
-    def sync(self):
+    async def sync(self):
         """
         Wrapper for synchronizing the state of the network for the given miner or validator.
         """
@@ -125,10 +126,16 @@ class BaseNeuron(ABC):
         self.check_registered()
 
         if self.should_sync_metagraph():
-            self.resync_metagraph()
+            if asyncio.iscoroutinefunction(self.resync_metagraph):
+                await self.resync_metagraph()
+            else:
+                self.resync_metagraph()
 
         if self.should_set_weights():
-            self.set_weights()
+            if asyncio.iscoroutinefunction(self.set_weights):
+                await self.set_weights()
+            else:
+                self.set_weights()
 
         # Always save state.
         self.save_state()
