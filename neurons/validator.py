@@ -43,8 +43,6 @@ class Validator(BaseValidatorNeuron):
 
         bt.logging.info("load_state()")
         self.load_state()
-
-        # TODO(developer): Anything specific to your use case you can do here
         self.miner_stats = {}
 
     def reset_miner_stats(self):
