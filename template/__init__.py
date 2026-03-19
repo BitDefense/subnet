@@ -25,8 +25,5 @@ __spec_version__ = (
     + (1 * int(version_split[2]))
 )
 
-# Import all submodules.
+# Import shared modules.
 from . import protocol
-from . import base
-from . import validator
-from . import api

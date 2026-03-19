@@ -12,16 +12,20 @@ def mock_bittensor_setup(monkeypatch):
     monkeypatch.setattr(bt, "Axon", MagicMock())
     monkeypatch.setattr(bt.logging, "info", MagicMock())
     monkeypatch.setattr(bt.logging, "error", MagicMock())
-    monkeypatch.setattr("template.base.miner.BaseMinerNeuron.__init__", MagicMock(return_value=None))
+    monkeypatch.setattr(bt.logging, "set_config", MagicMock())
+    monkeypatch.setattr(bt.logging, "warning", MagicMock())
     
 @pytest.mark.anyio
 async def test_miner_forward_pass(mock_bittensor_setup):
     # Setup miner
-    miner = Miner()
-    # Mocking the initialization that base miner would normally do
-    miner.config = MagicMock()
-    miner.axon = MagicMock()
-    miner.wallet = MagicMock()
+    with patch("neurons.miner.Miner.check_registered", return_value=None):
+        miner = Miner()
+    
+    # Mocking necessary components
+    miner.metagraph = MagicMock()
+    miner.metagraph.hotkeys = ["mock_hotkey"]
+    miner.wallet.hotkey.ss58_address = "mock_hotkey"
+    miner.uid = 0
     
     # Setup challenge
     payload = TransactionPayload(
@@ -42,7 +46,8 @@ async def test_miner_forward_pass(mock_bittensor_setup):
 @pytest.mark.anyio
 async def test_miner_forward_engine_failure(mock_bittensor_setup, monkeypatch):
     # Setup miner
-    miner = Miner()
+    with patch("neurons.miner.Miner.check_registered", return_value=None):
+        miner = Miner()
     
     # Force the engine to raise an exception
     def mock_execute_raise(*args, **kwargs):
@@ -65,6 +70,33 @@ async def test_miner_forward_engine_failure(mock_bittensor_setup, monkeypatch):
     
     # Check that output gracefully returns empty list on failure
     assert result_synapse.output == []
+
+@pytest.mark.anyio
+async def test_miner_blacklist_unrecognized_hotkey(mock_bittensor_setup):
+    # Setup miner
+    with patch("neurons.miner.Miner.check_registered", return_value=None):
+        miner = Miner()
+    
+    # Mock metagraph index to raise ValueError
+    miner.metagraph = MagicMock()
+    miner.metagraph.hotkeys.index.side_effect = ValueError("Not found")
+    
+    # Setup challenge with a mock hotkey
+    payload = TransactionPayload(
+        type="0x0", chain_id="0x01", nonce="0x0", gas_price="0x0",
+        gas="0x0", to="0x0", value="0x0", input="0x0", r="0x0", s="0x0", v="0x0",
+        hash="0x0", from_address="0x0"
+    )
+    tx = Transaction(hash="0x0", payload=payload)
+    synapse = Challenge(chain_id="1", block_number="123124", tx=tx, invariants=[])
+    synapse.dendrite = {"hotkey": "unknown_hotkey"}
+    
+    # Test blacklist
+    blacklisted, message = await miner.blacklist(synapse)
+    
+    # Check results
+    assert blacklisted is True
+    assert message == "Unrecognized hotkey"
 
 def test_miner_standalone_attributes():
     # This test will eventually verify that the Miner class has all necessary methods

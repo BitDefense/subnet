@@ -270,6 +270,52 @@ def config(cls):
     cls.add_args(parser)
     return bt.Config(parser)
 
+# --- MOCK BITTENSOR ---
+
+class MockSubtensor(bt.MockSubtensor):
+    def __init__(self, netuid, n=16, wallet=None, network="mock"):
+        super().__init__(network=network)
+
+        if not self.subnet_exists(netuid):
+            self.create_subnet(netuid)
+
+        # Register ourself (the validator) as a neuron at uid=0
+        if wallet is not None:
+            self.force_register_neuron(
+                netuid=netuid,
+                hotkey_ss58=wallet.hotkey.ss58_address,
+                coldkey_ss58=wallet.coldkey.ss58_address,
+                balance=100000,
+                stake=100000,
+            )
+
+        # Register n mock neurons who will be miners
+        for i in range(1, n + 1):
+            self.force_register_neuron(
+                netuid=netuid,
+                hotkey_ss58=f"miner-hotkey-{i}",
+                coldkey_ss58="mock-coldkey",
+                balance=100000,
+                stake=100000,
+            )
+
+
+class MockMetagraph(bt.Metagraph):
+    def __init__(self, netuid=1, network="mock", subtensor=None):
+        super().__init__(netuid=netuid, network=network, sync=False)
+
+        if subtensor is not None:
+            self.subtensor = subtensor
+        self.sync(subtensor=subtensor)
+
+        for axon in self.axons:
+            axon.ip = "127.0.0.0"
+            axon.port = 8091
+
+        bt.logging.info(f"Metagraph: {self}")
+        bt.logging.info(f"Axons: {self.axons}")
+
+
 # --- ENGINES ---
 
 class InvariantsCheckEngine(ABC):
@@ -315,9 +361,7 @@ class Miner(ABC):
         return ttl_get_block(self)
 
     def __init__(self, config=None):
-        base_config = copy.deepcopy(config or Miner.config())
-        self.config = Miner.config()
-        self.config.merge(base_config)
+        self.config = copy.deepcopy(config or Miner.config())
         self.check_config(self.config)
 
         # Set up logging with the provided configuration.
@@ -335,7 +379,6 @@ class Miner(ABC):
 
         # The wallet holds the cryptographic key pairs for the miner.
         if self.config.mock:
-            from template.mock import MockSubtensor, MockMetagraph
             self.wallet = bt.MockWallet(config=self.config)
             self.subtensor = MockSubtensor(
                 self.config.netuid, wallet=self.wallet
@@ -356,9 +399,16 @@ class Miner(ABC):
         self.check_registered()
 
         # Each miner gets a unique identity (UID) in the network for differentiation.
-        self.uid = self.metagraph.hotkeys.index(
-            self.wallet.hotkey.ss58_address
-        )
+        try:
+            self.uid = self.metagraph.hotkeys.index(
+                self.wallet.hotkey.ss58_address
+            )
+        except ValueError:
+            bt.logging.error(
+                f"Hotkey {self.wallet.hotkey.ss58_address} not found in metagraph. This should not happen if check_registered() passed."
+            )
+            exit()
+
         bt.logging.info(
             f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: {self.subtensor.chain_endpoint}"
         )
@@ -407,6 +457,7 @@ class Miner(ABC):
             synapse.output = self.engine.execute_checks(synapse)
         except Exception as e:
             bt.logging.error(f"Engine failed to execute checks: {e}")
+            bt.logging.error(traceback.format_exc())
             synapse.output = []
             
         return synapse
@@ -423,7 +474,14 @@ class Miner(ABC):
             )
             return True, "Missing dendrite or hotkey"
 
-        uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
+        try:
+            uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
+        except ValueError:
+            bt.logging.trace(
+                f"Blacklisting unrecognized hotkey {synapse.dendrite.hotkey}"
+            )
+            return True, "Unrecognized hotkey"
+
         if (
             not self.config.blacklist.allow_non_registered
             and synapse.dendrite.hotkey not in self.metagraph.hotkeys
