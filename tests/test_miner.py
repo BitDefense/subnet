@@ -65,3 +65,16 @@ async def test_miner_forward_engine_failure(mock_bittensor_setup, monkeypatch):
     
     # Check that output gracefully returns empty list on failure
     assert result_synapse.output == []
+
+def test_miner_standalone_attributes():
+    # This test will eventually verify that the Miner class has all necessary methods
+    # after flattening. For now, it might fail or pass depending on mocking.
+    # We use a mock config to avoid real network calls if it's not yet flattened.
+    with patch("bittensor.Wallet"), patch("bittensor.Subtensor"), patch("bittensor.Metagraph"):
+        miner = Miner()
+        assert hasattr(miner, 'run')
+        assert hasattr(miner, 'sync')
+        assert hasattr(miner, 'resync_metagraph')
+        assert hasattr(miner, 'check_registered')
+        assert hasattr(miner, 'should_sync_metagraph')
+        assert hasattr(miner, 'should_set_weights')
