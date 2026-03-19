@@ -30,4 +30,3 @@ from . import protocol
 from . import base
 from . import validator
 from . import api
-from .subnet_links import SUBNET_LINKS
