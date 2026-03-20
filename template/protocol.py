@@ -109,3 +109,13 @@ class Challenge(bt.Synapse):
             }
             
         return cls(**input_dict)
+
+class MempoolTransaction(bt.Synapse):
+    """
+    Synapse representing a raw Ethereum transaction sent from Platform to Validator.
+    """
+    tx: typing.Dict[str, typing.Any]
+    received: bool = False
+
+    def deserialize(self) -> bool:
+        return self.received
