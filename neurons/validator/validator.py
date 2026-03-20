@@ -32,9 +32,10 @@ from bittensor import Subtensor, Wallet, Config, Dendrite, Metagraph
 from bittensor.utils.btlogging import logging
 
 # Bittensor Validator Template:
-from template.protocol import Challenge, Transaction, TransactionPayload, Invariant
+from template.protocol import Challenge, Transaction, TransactionPayload, Invariant, MempoolTransaction
 
 from neurons.validator.reward import get_reward
+import httpx
 
 
 def check_uid_availability(metagraph: Metagraph, uid: int) -> bool:
@@ -61,6 +62,8 @@ class Validator:
         self.alpha = 0.1
 
         self.miner_stats = {}
+        self.platform_invariants = []
+        self.platform_queue = asyncio.Queue()
 
         self.step = 0
         self.loop = asyncio.get_event_loop()
@@ -75,6 +78,12 @@ class Validator:
         # Adds override arguments for network and netuid.
         parser.add_argument(
             "--netuid", type=int, default=1, help="The chain subnet uid."
+        )
+        parser.add_argument(
+            "--platform.url", type=str, default="http://localhost:8000", help="Platform API URL"
+        )
+        parser.add_argument(
+            "--platform.api_key", type=str, default="default_key", help="Platform API Key"
         )
         # Adds subtensor specific arguments.
         Subtensor.add_args(parser)
@@ -124,6 +133,16 @@ class Validator:
         # Initialize metagraph.
         self.metagraph = self.subtensor.metagraph(netuid=self.config.netuid)
         logging.info(f"Metagraph: {self.metagraph}")
+
+        # Initialize axon.
+        from bittensor import axon
+        self.axon = axon(wallet=self.wallet, config=self.config)
+        self.axon.attach(
+            forward_fn=self.mempool_handler,
+            blacklist_fn=self.mempool_blacklist,
+        )
+        self.axon.start()
+        logging.info(f"Axon started: {self.axon}")
 
         self.check_registered()
 
@@ -231,17 +250,103 @@ class Validator:
             invariants=invariants,
         )
 
+    def mempool_blacklist(self, synapse: MempoolTransaction) -> (bool, str):
+        # Only allow requests from known platforms or with correct API key if we want.
+        # For now, we'll check if the hotkey is in the metagraph (though platform might not be).
+        # In a real subnet, the platform might have a dedicated hotkey registered.
+        return False, ""
+
+    def mempool_handler(self, synapse: MempoolTransaction) -> MempoolTransaction:
+        logging.info(f"Received mempool transaction: {synapse.tx.get('hash', 'N/A')}")
+        self.platform_queue.put_nowait(synapse.tx)
+        synapse.received = True
+        return synapse
+
+    async def poll_invariants(self):
+        """Polls the platform for active invariants."""
+        while True:
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(
+                        f"{self.config.platform.url}/invariants",
+                        headers={"X-API-KEY": self.config.platform.api_key},
+                        timeout=10,
+                    )
+                    if response.status_code == 200:
+                        self.platform_invariants = response.json()
+                        logging.info(f"Polled {len(self.platform_invariants)} invariants from platform.")
+                    else:
+                        logging.error(f"Failed to poll invariants: {response.status_code}")
+            except Exception as e:
+                logging.error(f"Error polling invariants: {e}")
+            
+            await asyncio.sleep(self.config.polling_interval)
+
     async def forward(self) -> None:
         """Validator forward pass."""
         k = random.choice([1])
         miner_uids = self.get_random_uids(k=k)
-        logging.info(f"Querying {len(miner_uids)} miners (k={k})")
-
+        
+        # Try to get transaction from platform_queue
+        challenge = None
         try:
-            challenge = self.load_challenge_from_json("challenge_example.json")
+            tx_data = self.platform_queue.get_nowait()
+            logging.info(f"Using mempool transaction for challenge: {tx_data.get('hash', 'N/A')}")
+            
+            # Map platform transaction to Challenge synapse
+            payload = TransactionPayload(
+                type=tx_data.get("type", "0x0"),
+                chain_id=str(tx_data.get("chainId", self.config.netuid)),
+                nonce=str(tx_data.get("nonce", "0")),
+                gas_price=str(tx_data.get("gasPrice", "0")),
+                max_fee_per_gas=tx_data.get("maxFeePerGas"),
+                max_priority_fee_per_gas=tx_data.get("maxPriorityFeePerGas"),
+                gas=str(tx_data.get("gas", "0")),
+                to=tx_data["to"],
+                value=str(tx_data.get("value", "0")),
+                input=tx_data["input"],
+                r=tx_data["r"],
+                s=tx_data["s"],
+                v=tx_data["v"],
+                hash=tx_data["hash"],
+                from_address=tx_data.get("from"),
+            )
+            tx = Transaction(hash=tx_data["hash"], payload=payload)
+            
+            # Filter invariants for this target contract
+            relevant_invariants = []
+            expected_keys = ["contract", "type", "target", "storage", "storage_slot_type"]
+            for inv in self.platform_invariants:
+                if inv["contract"].lower() == tx_data["to"].lower():
+                    # Only pass the keys that Invariant model expects
+                    filtered_inv = {k: inv[k] for k in expected_keys if k in inv}
+                    relevant_invariants.append(Invariant(**filtered_inv))
+            
+            if not relevant_invariants:
+                logging.warning(f"No relevant invariants for contract {tx_data['to']}. Using defaults.")
+                # We could still send it to see what happens, or skip.
+                # Let's use a dummy invariant if none found to keep the flow.
+                relevant_invariants = [Invariant(contract=tx_data["to"], type="reentrancy", target="all", storage="0x0", storage_slot_type="uint256")]
+
+            challenge = Challenge(
+                chain_id=str(tx_data.get("chainId", self.config.netuid)),
+                block_number=str(tx_data.get("blockNumber", "0")),
+                tx=tx,
+                invariants=relevant_invariants,
+            )
+        except asyncio.QueueEmpty:
+            # Fallback to local example if no platform transactions
+            try:
+                challenge = self.load_challenge_from_json("challenge_example.json")
+                logging.info(f"No platform transactions. Using example challenge.")
+            except Exception as e:
+                logging.error(f"Failed to load fallback challenge: {e}")
+                return
         except Exception as e:
-            logging.error(f"Failed to load challenge: {e}")
+            logging.error(f"Error building challenge from platform transaction: {e}")
             return
+
+        logging.info(f"Querying {len(miner_uids)} miners with challenge {challenge.tx.hash}")
 
         synapses = await self.dendrite.forward(
             axons=[self.metagraph.axons[uid] for uid in miner_uids],
@@ -362,11 +467,13 @@ class Validator:
         logging.info("Starting validator loop.")
         logging.info(f"Validator starting at block: {self.block}")
 
+        # Start background polling for invariants
+        self.loop.create_task(self.poll_invariants())
+
         try:
             while True:
                 logging.info(f"step({self.step}) block({self.block})")
                 self.loop.run_until_complete(self.concurrent_forward())
-                # self.forward()
                 if self.should_exit:
                     break
                 self.sync()
