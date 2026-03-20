@@ -4,7 +4,7 @@ import asyncio
 from typing import List, Optional
 
 class Dispatcher:
-    def __init__(self, wallet: bt.wallet, metagraph: bt.metagraph):
+    def __init__(self, wallet: bt.Wallet, metagraph: bt.Metagraph):
         self.wallet = wallet
         self.metagraph = metagraph
         self.dendrite = bt.dendrite(wallet=wallet)

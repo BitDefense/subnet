@@ -85,6 +85,9 @@ class Validator:
         parser.add_argument(
             "--platform.api_key", type=str, default="default_key", help="Platform API Key"
         )
+        parser.add_argument(
+            "--polling_interval", type=int, default=60, help="Interval for validator to poll invariants"
+        )
         # Adds subtensor specific arguments.
         Subtensor.add_args(parser)
         # Adds logging specific arguments.

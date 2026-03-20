@@ -1,4 +1,5 @@
 import asyncio
+import json
 from web3 import AsyncWeb3, Web3
 from web3.providers.eth_tester import EthereumTesterProvider
 import bittensor as bt
@@ -25,7 +26,9 @@ async def mempool_worker(rpc_url: str, queue: asyncio.Queue, get_monitored_contr
                     monitored_contracts = get_monitored_contracts()
                     if tx["to"].lower() in monitored_contracts:
                         bt.logging.info(f"Matched monitored contract: {tx['to']}")
-                        await queue.put(dict(tx))
+                        # Convert AttributeDict/HexBytes to serializable dict
+                        tx_json = Web3.to_json(tx)
+                        await queue.put(json.loads(tx_json))
             except Exception as e:
                 bt.logging.error(f"Error processing transaction {tx_hash.hex()}: {e}")
                 
