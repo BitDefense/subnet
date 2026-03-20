@@ -60,5 +60,10 @@ This document outlines the necessary steps to transition from the Bittensor Subn
     - Define your desired contribution procedure.
     - List your communication channels (e.g., Discord, Telegram).
     - Update the repository URL in the installation instructions.
-- [ ] **General Documentation:**
-    - Update `README.md` with your subnet's specific details, installation steps, and usage examples.
+## 6. Platform Service
+**Goal:** Real-time transaction ingestion and invariant management.
+
+- [x] **Mempool Ingestion:** Ingest transactions from Sepolia mempool.
+- [x] **Dispatcher:** Round-robin dispatch to validators via `MempoolTransaction` synapse.
+- [x] **Invariant API:** Public endpoints for creating and polling invariants.
+- [x] **Validator Integration:** Validators poll invariants and handle platform transactions.

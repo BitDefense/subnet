@@ -32,11 +32,6 @@ uv sync
 uv run uvicorn platform_service.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### Mock Mode (No wallet required)
-```bash
-uv run uvicorn platform_service.main:app --host 0.0.0.0 --port 8000 -- --mock
-```
-
 ### With Bittensor Arguments
 ```bash
 uv run uvicorn platform_service.main:app --host 0.0.0.0 --port 8000 -- \
