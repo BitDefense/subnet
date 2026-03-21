@@ -8,9 +8,10 @@ from platform_service.config import get_config
 from platform_service.mempool import mempool_worker, get_monitored_contracts_from_db
 from platform_service.dispatcher import Dispatcher
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 from contextlib import asynccontextmanager
+from web3 import AsyncWeb3, WebSocketProvider
 
 # Initialize database
 init_db()
@@ -23,6 +24,43 @@ metagraph = subtensor.metagraph(netuid=config.netuid)
 queue = asyncio.Queue()
 dispatcher = Dispatcher(wallet=wallet, metagraph=metagraph)
 
+# Thread-safe (async-safe) block storage
+current_block: Optional[int] = None
+block_lock = asyncio.Lock()
+
+chain_id: int
+
+
+async def block_worker(rpc_url: str):
+    """
+    Subscribes to new blocks and updates current_block.
+    """
+    global current_block
+    logging.info(f"Connecting to block subscriber at {rpc_url}")
+
+    while True:
+        try:
+            async with AsyncWeb3(WebSocketProvider(rpc_url)) as w3:
+                # Subscribe to new heads
+                await w3.eth.subscribe("newHeads")
+                logging.info("Subscribed to newHeads")
+
+                async for response in w3.socket.process_subscriptions():
+                    try:
+                        new_block = int(response["result"]["number"])
+                        async with block_lock:
+                            current_block = new_block
+                        logging.info(f"New block arrived: {current_block}")
+                    except Exception as e:
+                        logging.error(f"Error processing block update: {e}")
+
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logging.error(f"Block subscriber connection error: {e}")
+            await asyncio.sleep(5)
+            logging.info("Retrying block subscriber connection...")
+
 
 async def dispatch_loop():
     """
@@ -32,7 +70,13 @@ async def dispatch_loop():
     while True:
         try:
             tx = await queue.get()
-            await dispatcher.dispatch(tx)
+            # Read block number safely
+            async with block_lock:
+                block_to_send = current_block
+
+            await dispatcher.dispatch(
+                chain_id=chain_id, block_number=block_to_send, tx_dict=tx
+            )
             queue.task_done()
         except asyncio.CancelledError:
             break
@@ -57,13 +101,46 @@ async def sync_metagraph():
             await asyncio.sleep(60)
 
 
+async def get_initial_block(rpc_url: str):
+    """
+    Fetches the initial block number from the RPC provider.
+    """
+    global current_block
+    try:
+        async with AsyncWeb3(WebSocketProvider(rpc_url)) as w3:
+            block = await w3.eth.block_number
+            async with block_lock:
+                current_block = block
+            logging.info(f"Initial block retrieved: {current_block}")
+    except Exception as e:
+        logging.error(f"Failed to retrieve initial block: {e}")
+
+
+async def get_chain_id(rpc_url: str):
+    """
+    Fetches the initial chain ID from the RPC provider.
+    """
+    global chain_id
+    try:
+        async with AsyncWeb3(WebSocketProvider(rpc_url)) as w3:
+            chain_id = await w3.eth.chain_id
+            logging.info(f"Chain ID retrieved: {chain_id}")
+    except Exception as e:
+        logging.error(f"Failed to retrieve chain ID: {e}")
+        return None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Start background tasks
     logging.info("Initializing Platform background tasks...")
+    await get_chain_id(config.rpc_url)
+    await get_initial_block(config.rpc_url)
+
     mempool_task = asyncio.create_task(
         mempool_worker(config.rpc_url, queue, get_monitored_contracts_from_db)
     )
+    block_task = asyncio.create_task(block_worker(config.rpc_url))
     dispatch_task = asyncio.create_task(dispatch_loop())
     metagraph_task = asyncio.create_task(sync_metagraph())
 
@@ -72,6 +149,7 @@ async def lifespan(app: FastAPI):
     # Shutdown sequence
     logging.info("Shutting down Platform service...")
     mempool_task.cancel()
+    block_task.cancel()
     dispatch_task.cancel()
     metagraph_task.cancel()
 
@@ -79,7 +157,11 @@ async def lifespan(app: FastAPI):
     try:
         await asyncio.wait_for(
             asyncio.gather(
-                mempool_task, dispatch_task, metagraph_task, return_exceptions=True
+                mempool_task,
+                block_task,
+                dispatch_task,
+                metagraph_task,
+                return_exceptions=True,
             ),
             timeout=5.0,
         )

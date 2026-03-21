@@ -10,7 +10,12 @@ class Dispatcher:
         self.dendrite = Dendrite(wallet=wallet)
         self.current_index = 0
 
-    async def dispatch(self, tx_dict: dict) -> bool:
+    async def dispatch(
+        self,
+        chain_id: int,
+        block_number: int,
+        tx_dict: dict,
+    ) -> bool:
         """
         Dispatches a transaction to the next available validator in a round-robin fashion.
         """
@@ -20,6 +25,10 @@ class Dispatcher:
             for uid in range(len(self.metagraph.axons))
             if self.metagraph.validator_trust[uid] > 0
         ]
+
+        logging.debug(
+            f"Try to dispatch chain {chain_id} block {block_number} tx {tx_dict['hash']} to validators"
+        )
 
         if not validators:
             logging.warning("No active validators found in metagraph.")
@@ -31,9 +40,13 @@ class Dispatcher:
             target_axon = validators[self.current_index % num_validators]
             self.current_index += 1
 
-            logging.info(f"Dispatching transaction to validator: {target_axon.hotkey}")
+            logging.info(f"Dispatching transaction to validator: {target_axon.hotkey})")
 
-            synapse = MempoolTransaction(tx=tx_dict)
+            synapse = MempoolTransaction(
+                chain_id=chain_id,
+                block_number=block_number,
+                tx=tx_dict,
+            )
             try:
                 responses = await self.dendrite(
                     [target_axon],

@@ -21,15 +21,18 @@ import bittensor as bt
 
 from pydantic import BaseModel, Field, ConfigDict
 
+
 class TransactionPayload(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
-    
+
     type: str
     chain_id: str = Field(alias="chainId")
     nonce: str
     gas_price: str = Field(alias="gasPrice")
     max_fee_per_gas: typing.Optional[str] = Field(default=None, alias="maxFeePerGas")
-    max_priority_fee_per_gas: typing.Optional[str] = Field(default=None, alias="maxPriorityFeePerGas")
+    max_priority_fee_per_gas: typing.Optional[str] = Field(
+        default=None, alias="maxPriorityFeePerGas"
+    )
     gas: str
     to: str
     value: str
@@ -40,9 +43,11 @@ class TransactionPayload(BaseModel):
     hash: str
     from_address: str = Field(alias="from")
 
+
 class Transaction(BaseModel):
     hash: str
     payload: TransactionPayload
+
 
 class Invariant(BaseModel):
     contract: str
@@ -51,10 +56,12 @@ class Invariant(BaseModel):
     storage: str
     storage_slot_type: str
 
+
 class Challenge(bt.Synapse):
     """
     The BitDefense Challenge protocol representation.
     """
+
     chain_id: str
     block_number: str
     tx: Transaction
@@ -64,7 +71,7 @@ class Challenge(bt.Synapse):
 
     def deserialize(self) -> typing.List[int]:
         """
-        Deserialize the challenge output. 
+        Deserialize the challenge output.
         Returns an empty list if output is None.
         """
         if self.output is None:
@@ -79,7 +86,7 @@ class Challenge(bt.Synapse):
         during the header parsing phase before the JSON body is processed.
         """
         input_dict = cls.parse_headers_to_inputs(headers)
-        
+
         # Manually handle lowercased keys from headers if they don't match snake_case
         if "chainid" in input_dict and "chain_id" not in input_dict:
             input_dict["chain_id"] = input_dict.pop("chainid")
@@ -104,16 +111,20 @@ class Challenge(bt.Synapse):
                     "s": "",
                     "v": "",
                     "hash": "",
-                    "from": ""
-                }
+                    "from": "",
+                },
             }
-            
+
         return cls(**input_dict)
+
 
 class MempoolTransaction(bt.Synapse):
     """
     Synapse representing a raw Ethereum transaction sent from Platform to Validator.
     """
+
+    chain_id: int
+    block_number: int
     tx: typing.Dict[str, typing.Any]
     received: bool = False
 
