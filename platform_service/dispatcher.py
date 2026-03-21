@@ -20,6 +20,7 @@ class Dispatcher:
         Dispatches a transaction to the next available validator in a round-robin fashion.
         """
         # Get active validators (nodes with positive trust)
+
         validators = [
             self.metagraph.axons[uid]
             for uid in range(len(self.metagraph.axons))

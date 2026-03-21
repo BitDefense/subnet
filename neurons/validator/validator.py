@@ -25,10 +25,10 @@ import asyncio
 import argparse
 import threading
 import numpy as np
-from typing import List
+from typing import List, Tuple
 from traceback import print_exception
 
-from bittensor import Subtensor, Wallet, Config, Dendrite, Metagraph
+from bittensor import Subtensor, Wallet, Config, Dendrite, Metagraph, Axon
 from bittensor.utils.btlogging import logging
 
 # Bittensor Validator Template:
@@ -109,6 +109,7 @@ class Validator:
         logging.add_args(parser)
         # Adds wallet specific arguments.
         Wallet.add_args(parser)
+        Axon.add_args(parser)
         # Parse the config.
         config = Config(parser)
         # Set up logging directory.
@@ -132,6 +133,28 @@ class Validator:
         )
         logging.info(self.config)
 
+    def setup_axon(self):
+        # Build and link miner functions to the axon.
+        self.axon = Axon(wallet=self.wallet, config=self.config)
+
+        # Attach functions to the axon.
+        logging.info("Attaching forward function to axon.")
+        self.axon.attach(
+            forward_fn=self.mempool_handler,
+            blacklist_fn=self.mempool_blacklist,
+        )
+
+        # Serve the axon.
+        logging.info(
+            f"Serving axon on network: {self.config.subtensor.network} with netuid: {self.config.netuid}"
+        )
+        self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
+        logging.info(f"Axon: {self.axon}")
+
+        # Start the axon server.
+        logging.info(f"Starting axon server on port: {self.config.axon.port}")
+        self.axon.start()
+
     def setup_bittensor_objects(self):
         # Build Bittensor validator objects.
         logging.info("Setting up Bittensor objects.")
@@ -153,15 +176,7 @@ class Validator:
         logging.info(f"Metagraph: {self.metagraph}")
 
         # Initialize axon.
-        from bittensor import axon
-
-        self.axon = axon(wallet=self.wallet, config=self.config)
-        self.axon.attach(
-            forward_fn=self.mempool_handler,
-            blacklist_fn=self.mempool_blacklist,
-        )
-        self.axon.start()
-        logging.info(f"Axon started: {self.axon}")
+        self.setup_axon()
 
         self.check_registered()
 
@@ -269,15 +284,15 @@ class Validator:
             invariants=invariants,
         )
 
-    def mempool_blacklist(self, synapse: MempoolTransaction) -> (bool, str):
+    def mempool_blacklist(self, synapse: MempoolTransaction) -> Tuple[bool, str]:
         # Only allow requests from known platforms or with correct API key if we want.
         # For now, we'll check if the hotkey is in the metagraph (though platform might not be).
         # In a real subnet, the platform might have a dedicated hotkey registered.
-        return False, ""
+        return False, None
 
     def mempool_handler(self, synapse: MempoolTransaction) -> MempoolTransaction:
-        logging.info(f"Received mempool transaction: {synapse.tx.get('hash', 'N/A')}")
-        self.platform_queue.put_nowait(synapse.tx)
+        logging.info(f"Received mempool transaction: {synapse.tx.get('hash')}")
+        self.platform_queue.put_nowait(synapse)
         synapse.received = True
         return synapse
 
@@ -305,23 +320,81 @@ class Validator:
 
             await asyncio.sleep(self.config.polling_interval)
 
-    async def forward(self) -> None:
+    async def forward_loop(self):
         """Validator forward pass."""
+        while True:
+            try:
+                mempool_tx = await self.platform_queue.get()
+                logging.info(
+                    f"Using mempool transaction for challenge: {mempool_tx.tx.get('hash')}"
+                )
+
+                (
+                    challenge,
+                    synapses,
+                    miner_uids,
+                ) = await self.process_mempool_transaction(mempool_tx)
+
+                num_invariants = len(challenge.invariants)
+                responses = [syn.deserialize() for syn in synapses]
+                latencies = [syn.dendrite.process_time for syn in synapses]
+
+                ground_truth = []
+                for i in range(num_invariants):
+                    votes = {0: 0, 1: 0}
+                    for resp in responses:
+                        if resp and len(resp) > i:
+                            vote = resp[i]
+                            if vote in votes:
+                                votes[vote] += 1
+                    total_votes = sum(votes.values())
+                    consensus_status = None
+                    if total_votes > 0:
+                        for status, count in votes.items():
+                            if count / total_votes >= 0.60:
+                                consensus_status = status
+                                break
+                    ground_truth.append(consensus_status)
+
+                for idx, uid in enumerate(miner_uids):
+                    if uid not in self.miner_stats:
+                        self.miner_stats[uid] = {
+                            "processed_tx_hashes": set(),
+                            "true_positives": 0,
+                            "total_tasks": 0,
+                            "latencies": [],
+                        }
+                    stats = self.miner_stats[uid]
+                    resp = responses[idx]
+                    latency = latencies[idx]
+                    if resp:
+                        stats["processed_tx_hashes"].add(challenge.tx.hash)
+                        if latency is not None:
+                            stats["latencies"].append(latency)
+                        for i in range(num_invariants):
+                            if len(resp) > i and ground_truth[i] is not None:
+                                stats["total_tasks"] += 1
+                                if resp[i] == ground_truth[i]:
+                                    stats["true_positives"] += 1
+
+                self.platform_queue.task_done()
+            except Exception as e:
+                logging.error(f"Error polling invariants: {e}")
+
+    async def process_mempool_transaction(self, mem: MempoolTransaction):
         k = random.choice([1])
         miner_uids = self.get_random_uids(k=k)
 
         # Try to get transaction from platform_queue
         challenge = None
-        try:
-            tx_data = self.platform_queue.get_nowait()
-            logging.info(
-                f"Using mempool transaction for challenge: {tx_data.get('hash', 'N/A')}"
-            )
 
+        try:
             # Map platform transaction to Challenge synapse
+            tx_data = mem.tx
+
             payload = TransactionPayload(
                 type=tx_data.get("type", "0x0"),
-                chain_id=str(tx_data.get("chainId", self.config.netuid)),
+                chain_id=str(tx_data.get("chainId")),
                 nonce=str(tx_data.get("nonce", "0")),
                 gas_price=str(tx_data.get("gasPrice", "0")),
                 max_fee_per_gas=tx_data.get("maxFeePerGas"),
@@ -340,49 +413,21 @@ class Validator:
 
             # Filter invariants for this target contract
             relevant_invariants = []
-            expected_keys = [
-                "contract",
-                "type",
-                "target",
-                "storage",
-                "storage_slot_type",
-            ]
             for inv in self.platform_invariants:
-                if inv["contract"].lower() == tx_data["to"].lower():
-                    # Only pass the keys that Invariant model expects
-                    filtered_inv = {k: inv[k] for k in expected_keys if k in inv}
-                    relevant_invariants.append(Invariant(**filtered_inv))
+                # Only pass the keys that Invariant model expects
+                relevant_invariants.append(Invariant(**inv))
 
             if not relevant_invariants:
                 logging.warning(
                     f"No relevant invariants for contract {tx_data['to']}. Using defaults."
                 )
-                # We could still send it to see what happens, or skip.
-                # Let's use a dummy invariant if none found to keep the flow.
-                relevant_invariants = [
-                    Invariant(
-                        contract=tx_data["to"],
-                        type="reentrancy",
-                        target="all",
-                        storage="0x0",
-                        storage_slot_type="uint256",
-                    )
-                ]
 
             challenge = Challenge(
-                chain_id=str(tx_data.get("chainId")),
-                block_number=str(tx_data.get("blockNumber")),
+                chain_id=str(mem.chain_id),
+                block_number=str(mem.block_number),
                 tx=tx,
                 invariants=relevant_invariants,
             )
-        except asyncio.QueueEmpty:
-            # Fallback to local example if no platform transactions
-            try:
-                challenge = self.load_challenge_from_json("challenge_example.json")
-                logging.info("No platform transactions. Using example challenge.")
-            except Exception as e:
-                logging.error(f"Failed to load fallback challenge: {e}")
-                return
         except Exception as e:
             logging.error(f"Error building challenge from platform transaction: {e}")
             return
@@ -398,47 +443,7 @@ class Validator:
             timeout=12,
         )
 
-        num_invariants = len(challenge.invariants)
-        responses = [syn.deserialize() for syn in synapses]
-        latencies = [syn.dendrite.process_time for syn in synapses]
-
-        ground_truth = []
-        for i in range(num_invariants):
-            votes = {0: 0, 1: 0}
-            for resp in responses:
-                if resp and len(resp) > i:
-                    vote = resp[i]
-                    if vote in votes:
-                        votes[vote] += 1
-            total_votes = sum(votes.values())
-            consensus_status = None
-            if total_votes > 0:
-                for status, count in votes.items():
-                    if count / total_votes >= 0.66:
-                        consensus_status = status
-                        break
-            ground_truth.append(consensus_status)
-
-        for idx, uid in enumerate(miner_uids):
-            if uid not in self.miner_stats:
-                self.miner_stats[uid] = {
-                    "processed_tx_hashes": set(),
-                    "true_positives": 0,
-                    "total_tasks": 0,
-                    "latencies": [],
-                }
-            stats = self.miner_stats[uid]
-            resp = responses[idx]
-            latency = latencies[idx]
-            if resp:
-                stats["processed_tx_hashes"].add(challenge.tx.hash)
-                if latency is not None:
-                    stats["latencies"].append(latency)
-                for i in range(num_invariants):
-                    if len(resp) > i and ground_truth[i] is not None:
-                        stats["total_tasks"] += 1
-                        if resp[i] == ground_truth[i]:
-                            stats["true_positives"] += 1
+        return challenge, synapses, miner_uids
 
     def sync(self) -> None:
         self.metagraph.sync()
@@ -512,11 +517,11 @@ class Validator:
 
         # Start background polling for invariants
         self.loop.create_task(self.poll_invariants())
+        self.loop.create_task(self.forward_loop())
 
         try:
             while True:
-                logging.info(f"step({self.step}) block({self.block})")
-                self.loop.run_until_complete(self.concurrent_forward())
+                logging.debug(f"block({self.block})")
                 if self.should_exit:
                     break
                 self.sync()

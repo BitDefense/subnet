@@ -93,7 +93,7 @@ async def sync_metagraph():
         try:
             metagraph.sync(subtensor=subtensor)
             logging.info("Metagraph synced")
-            await asyncio.sleep(300)
+            await asyncio.sleep(60)
         except asyncio.CancelledError:
             break
         except Exception as e:
@@ -134,6 +134,7 @@ async def get_chain_id(rpc_url: str):
 async def lifespan(app: FastAPI):
     # Start background tasks
     logging.info("Initializing Platform background tasks...")
+    metagraph.sync(subtensor=subtensor)
     await get_chain_id(config.rpc_url)
     await get_initial_block(config.rpc_url)
 
