@@ -153,11 +153,14 @@ class Miner(ABC):
         """
         Processes the incoming 'Challenge' synapse by performing invariant checks.
         """
+        startedAt = time.time_ns()
         try:
             synapse.output = self.engine.execute_checks(synapse)
+            logging.info(
+                f"Challenge processed: {synapse.tx.get('hash')} in {(time.time_ns() - startedAt) / 1e6}ms"
+            )
         except Exception as e:
             logging.error(f"Engine failed to execute checks: {e}")
-            logging.error(traceback.format_exc())
             synapse.output = []
 
         return synapse

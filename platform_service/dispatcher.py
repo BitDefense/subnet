@@ -3,6 +3,14 @@ from template.protocol import MempoolTransaction
 from bittensor.utils.btlogging import logging
 
 
+def check_uid_availability(metagraph: Metagraph, uid: int) -> bool:
+    if not metagraph.axons[uid].is_serving:
+        return False
+    if metagraph.validator_permit[uid]:
+        return True
+    return False
+
+
 class Dispatcher:
     def __init__(self, wallet: Wallet, metagraph: Metagraph):
         self.wallet = wallet
@@ -24,7 +32,7 @@ class Dispatcher:
         validators = [
             self.metagraph.axons[uid]
             for uid in range(len(self.metagraph.axons))
-            if self.metagraph.validator_trust[uid] > 0
+            if check_uid_availability(self.metagraph, uid)
         ]
 
         logging.debug(

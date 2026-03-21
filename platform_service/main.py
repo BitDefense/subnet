@@ -85,13 +85,14 @@ async def dispatch_loop():
             await asyncio.sleep(1)
 
 
-async def sync_metagraph():
+async def sync_metagraph(metagraph, subtensor):
     """
     Background task to sync the metagraph.
     """
     while True:
         try:
-            metagraph.sync(subtensor=subtensor)
+            # Syncing metagraph is a blocking call, perform in thread
+            await asyncio.to_thread(metagraph.sync, subtensor=subtensor)
             logging.info("Metagraph synced")
             await asyncio.sleep(60)
         except asyncio.CancelledError:
@@ -143,7 +144,7 @@ async def lifespan(app: FastAPI):
     )
     block_task = asyncio.create_task(block_worker(config.rpc_url))
     dispatch_task = asyncio.create_task(dispatch_loop())
-    metagraph_task = asyncio.create_task(sync_metagraph())
+    metagraph_task = asyncio.create_task(sync_metagraph(metagraph, subtensor))
 
     yield
 
@@ -196,7 +197,7 @@ class InvariantSchema(BaseModel):
     type: str
     target: str
     storage: str
-    storage_slot_type: str
+    slot_type: str
 
 
 class InvariantResponse(InvariantSchema):

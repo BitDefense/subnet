@@ -26,7 +26,7 @@ import argparse
 import threading
 import numpy as np
 from typing import List, Tuple
-from traceback import print_exception
+import traceback
 
 from bittensor import Subtensor, Wallet, Config, Dendrite, Metagraph, Axon
 from bittensor.utils.btlogging import logging
@@ -34,8 +34,6 @@ from bittensor.utils.btlogging import logging
 # Bittensor Validator Template:
 from template.protocol import (
     Challenge,
-    Transaction,
-    TransactionPayload,
     Invariant,
     MempoolTransaction,
 )
@@ -69,10 +67,11 @@ class Validator:
 
         self.miner_stats = {}
         self.platform_invariants = []
-        self.platform_queue = asyncio.Queue()
+        # Queue will be initialized in the thread where the loop runs
+        self.platform_queue = None
 
         self.step = 0
-        self.loop = asyncio.get_event_loop()
+        self.loop = None
         self.should_exit = False
         self.is_running = False
         self.thread = None
@@ -230,69 +229,20 @@ class Validator:
         uids = np.array(random.sample(available_uids, k))
         return uids
 
-    def load_challenge_from_json(self, file_path: str) -> Challenge:
-        """Loads a challenge from a JSON file. If file_path is a directory, picks a random JSON file."""
-        if not os.path.isabs(file_path):
-            # Handle path relative to neurons/
-            dir_path = os.path.dirname(os.path.realpath(__file__))
-            file_path = os.path.normpath(os.path.join(dir_path, "..", file_path))
-
-        if os.path.isdir(file_path):
-            files = [
-                os.path.join(file_path, f)
-                for f in os.listdir(file_path)
-                if f.endswith(".json")
-            ]
-            if not files:
-                raise FileNotFoundError(
-                    f"No JSON files found in directory: {file_path}"
-                )
-            file_path = random.choice(files)
-
-        with open(file_path, "r") as f:
-            data = json.load(f)
-
-        for inv in data.get("invariants", []):
-            if "storage_slot_type" not in inv:
-                inv["storage_slot_type"] = "uint256"
-
-        p = data["tx"]["payload"]
-        payload = TransactionPayload(
-            type=p["type"],
-            chain_id=p["chainId"],
-            nonce=p["nonce"],
-            gas_price=p["gasPrice"],
-            max_fee_per_gas=p.get("maxFeePerGas"),
-            max_priority_fee_per_gas=p.get("maxPriorityFeePerGas"),
-            gas=p["gas"],
-            to=p["to"],
-            value=p["value"],
-            input=p["input"],
-            r=p["r"],
-            s=p["s"],
-            v=p["v"],
-            hash=p["hash"],
-            from_address=p.get("from") or p.get("fromAddress") or p.get("from_address"),
-        )
-        tx = Transaction(hash=data["tx"]["hash"], payload=payload)
-        invariants = [Invariant(**inv) for inv in data["invariants"]]
-
-        return Challenge(
-            chain_id=str(data["chainId"]),
-            block_number=str(data["blockNumber"]),
-            tx=tx,
-            invariants=invariants,
-        )
-
-    def mempool_blacklist(self, synapse: MempoolTransaction) -> Tuple[bool, str]:
+    async def mempool_blacklist(self, synapse: MempoolTransaction) -> Tuple[bool, str]:
         # Only allow requests from known platforms or with correct API key if we want.
         # For now, we'll check if the hotkey is in the metagraph (though platform might not be).
         # In a real subnet, the platform might have a dedicated hotkey registered.
         return False, None
 
-    def mempool_handler(self, synapse: MempoolTransaction) -> MempoolTransaction:
-        logging.info(f"Received mempool transaction: {synapse.tx.get('hash')}")
-        self.platform_queue.put_nowait(synapse)
+    async def mempool_handler(self, synapse: MempoolTransaction) -> MempoolTransaction:
+        logging.debug(f"Received mempool transaction: {synapse.tx.get('hash')}")
+        if self.platform_queue and self.loop:
+            self.loop.call_soon_threadsafe(self.platform_queue.put_nowait, synapse)
+        else:
+            logging.warning(
+                "Platform queue or loop not initialized, dropping transaction."
+            )
         synapse.received = True
         return synapse
 
@@ -325,7 +275,7 @@ class Validator:
         while True:
             try:
                 mempool_tx = await self.platform_queue.get()
-                logging.info(
+                logging.debug(
                     f"Using mempool transaction for challenge: {mempool_tx.tx.get('hash')}"
                 )
 
@@ -334,6 +284,14 @@ class Validator:
                     synapses,
                     miner_uids,
                 ) = await self.process_mempool_transaction(mempool_tx)
+
+                if not miner_uids:
+                    logging.warning("No available miners found.")
+                    continue
+
+                if not challenge:
+                    logging.warning("No challenge created.")
+                    continue
 
                 num_invariants = len(challenge.invariants)
                 responses = [syn.deserialize() for syn in synapses]
@@ -368,7 +326,7 @@ class Validator:
                     resp = responses[idx]
                     latency = latencies[idx]
                     if resp:
-                        stats["processed_tx_hashes"].add(challenge.tx.hash)
+                        stats["processed_tx_hashes"].add(challenge.tx.get("hash"))
                         if latency is not None:
                             stats["latencies"].append(latency)
                         for i in range(num_invariants):
@@ -379,11 +337,14 @@ class Validator:
 
                 self.platform_queue.task_done()
             except Exception as e:
-                logging.error(f"Error polling invariants: {e}")
+                logging.error(f"Error in forward loop: {e}")
 
     async def process_mempool_transaction(self, mem: MempoolTransaction):
         k = random.choice([1])
         miner_uids = self.get_random_uids(k=k)
+
+        if not miner_uids:
+            return None, [], []
 
         # Try to get transaction from platform_queue
         challenge = None
@@ -392,25 +353,6 @@ class Validator:
             # Map platform transaction to Challenge synapse
             tx_data = mem.tx
 
-            payload = TransactionPayload(
-                type=tx_data.get("type", "0x0"),
-                chain_id=str(tx_data.get("chainId")),
-                nonce=str(tx_data.get("nonce", "0")),
-                gas_price=str(tx_data.get("gasPrice", "0")),
-                max_fee_per_gas=tx_data.get("maxFeePerGas"),
-                max_priority_fee_per_gas=tx_data.get("maxPriorityFeePerGas"),
-                gas=str(tx_data.get("gas", "0")),
-                to=tx_data["to"],
-                value=str(tx_data.get("value", "0")),
-                input=tx_data["input"],
-                r=tx_data["r"],
-                s=tx_data["s"],
-                v=tx_data["v"],
-                hash=tx_data["hash"],
-                from_address=tx_data.get("from"),
-            )
-            tx = Transaction(hash=tx_data["hash"], payload=payload)
-
             # Filter invariants for this target contract
             relevant_invariants = []
             for inv in self.platform_invariants:
@@ -418,14 +360,13 @@ class Validator:
                 relevant_invariants.append(Invariant(**inv))
 
             if not relevant_invariants:
-                logging.warning(
-                    f"No relevant invariants for contract {tx_data['to']}. Using defaults."
-                )
+                logging.warning("No relevant invariants for contracts")
+                return
 
             challenge = Challenge(
                 chain_id=str(mem.chain_id),
                 block_number=str(mem.block_number),
-                tx=tx,
+                tx=tx_data,
                 invariants=relevant_invariants,
             )
         except Exception as e:
@@ -433,7 +374,7 @@ class Validator:
             return
 
         logging.info(
-            f"Querying {len(miner_uids)} miners with challenge {challenge.tx.hash}"
+            f"Querying {len(miner_uids)} miners with challenge {challenge.tx.get('hash')}"
         )
 
         synapses = await self.dendrite.forward(
@@ -510,32 +451,40 @@ class Validator:
                 f"Failed to set weights: {response.error} - {response.message}"
             )
 
-    def run(self) -> None:
-        # The Main Validation Loop.
-        logging.info("Starting validator loop.")
-        logging.info(f"Validator starting at block: {self.block}")
+    async def main_loop(self):
+        """Main async loop for the validator."""
+        self.platform_queue = asyncio.Queue()
 
-        # Start background polling for invariants
+        # Start background tasks
         self.loop.create_task(self.poll_invariants())
         self.loop.create_task(self.forward_loop())
 
+        while not self.should_exit:
+            # Run blocking sync logic in a separate thread
+            await asyncio.to_thread(self.sync)
+            await asyncio.sleep(1)
+            self.step += 1
+
+    def run(self) -> None:
+        # The Main Validation Loop.
+        logging.info("Starting validator loop.")
+
+        # In the background thread, we need a fresh event loop
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+
         try:
-            while True:
-                logging.debug(f"block({self.block})")
-                if self.should_exit:
-                    break
-                self.sync()
-                time.sleep(1)
+            self.loop.run_until_complete(self.main_loop())
         except KeyboardInterrupt:
             if hasattr(self, "axon"):
                 self.axon.stop()
-
             logging.success("Validator killed by keyboard interrupt.")
-
             exit()
         except Exception as err:
             logging.error(f"Error during validation: {str(err)}")
-            logging.debug(str(print_exception(type(err), err, err.__traceback__)))
+            logging.debug(traceback.format_exc())
+        finally:
+            self.loop.close()
 
     async def concurrent_forward(self) -> None:
         coroutines = [self.forward() for _ in range(1)]

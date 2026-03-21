@@ -19,34 +19,7 @@
 import typing
 import bittensor as bt
 
-from pydantic import BaseModel, Field, ConfigDict
-
-
-class TransactionPayload(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    type: str
-    chain_id: str = Field(alias="chainId")
-    nonce: str
-    gas_price: str = Field(alias="gasPrice")
-    max_fee_per_gas: typing.Optional[str] = Field(default=None, alias="maxFeePerGas")
-    max_priority_fee_per_gas: typing.Optional[str] = Field(
-        default=None, alias="maxPriorityFeePerGas"
-    )
-    gas: str
-    to: str
-    value: str
-    input: str
-    r: str
-    s: str
-    v: str
-    hash: str
-    from_address: str = Field(alias="from")
-
-
-class Transaction(BaseModel):
-    hash: str
-    payload: TransactionPayload
+from pydantic import BaseModel
 
 
 class Invariant(BaseModel):
@@ -54,7 +27,7 @@ class Invariant(BaseModel):
     type: str
     target: str
     storage: str
-    storage_slot_type: str
+    slot_type: str
 
 
 class Challenge(bt.Synapse):
@@ -64,7 +37,7 @@ class Challenge(bt.Synapse):
 
     chain_id: str
     block_number: str
-    tx: Transaction
+    tx: typing.Dict[str, typing.Any]
     invariants: typing.List[Invariant]
 
     output: typing.Optional[typing.List[int]] = None
@@ -78,44 +51,44 @@ class Challenge(bt.Synapse):
             return []
         return self.output
 
-    @classmethod
-    def from_headers(cls, headers: dict) -> "Challenge":
-        """
-        Constructs a Synapse instance from a dictionary of headers.
-        Injects a dummy 'tx' dictionary if it is empty to satisfy Pydantic validation
-        during the header parsing phase before the JSON body is processed.
-        """
-        input_dict = cls.parse_headers_to_inputs(headers)
+    # @classmethod
+    # def from_headers(cls, headers: dict) -> "Challenge":
+    #     """
+    #     Constructs a Synapse instance from a dictionary of headers.
+    #     Injects a dummy 'tx' dictionary if it is empty to satisfy Pydantic validation
+    #     during the header parsing phase before the JSON body is processed.
+    #     """
+    #     input_dict = cls.parse_headers_to_inputs(headers)
 
-        # Manually handle lowercased keys from headers if they don't match snake_case
-        if "chainid" in input_dict and "chain_id" not in input_dict:
-            input_dict["chain_id"] = input_dict.pop("chainid")
-        if "blocknumber" in input_dict and "block_number" not in input_dict:
-            input_dict["block_number"] = input_dict.pop("blocknumber")
+    #     # Manually handle lowercased keys from headers if they don't match snake_case
+    #     if "chainid" in input_dict and "chain_id" not in input_dict:
+    #         input_dict["chain_id"] = input_dict.pop("chainid")
+    #     if "blocknumber" in input_dict and "block_number" not in input_dict:
+    #         input_dict["block_number"] = input_dict.pop("blocknumber")
 
-        # Inject dummy data for complex required fields to pass the dummy header phase.
-        # Bittensor provides `{}` for nested models during header parsing.
-        if isinstance(input_dict.get("tx"), dict) and not input_dict["tx"]:
-            input_dict["tx"] = {
-                "hash": "",
-                "payload": {
-                    "type": "",
-                    "chainId": "",
-                    "nonce": "",
-                    "gasPrice": "",
-                    "gas": "",
-                    "to": "",
-                    "value": "",
-                    "input": "",
-                    "r": "",
-                    "s": "",
-                    "v": "",
-                    "hash": "",
-                    "from": "",
-                },
-            }
+    #     # Inject dummy data for complex required fields to pass the dummy header phase.
+    #     # Bittensor provides `{}` for nested models during header parsing.
+    #     if isinstance(input_dict.get("tx"), dict) and not input_dict["tx"]:
+    #         input_dict["tx"] = {
+    #             "hash": "",
+    #             "payload": {
+    #                 "type": "",
+    #                 "chainId": "",
+    #                 "nonce": "",
+    #                 "gasPrice": "",
+    #                 "gas": "",
+    #                 "to": "",
+    #                 "value": "",
+    #                 "input": "",
+    #                 "r": "",
+    #                 "s": "",
+    #                 "v": "",
+    #                 "hash": "",
+    #                 "from": "",
+    #             },
+    #         }
 
-        return cls(**input_dict)
+    #     return cls(**input_dict)
 
 
 class MempoolTransaction(bt.Synapse):
