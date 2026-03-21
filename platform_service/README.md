@@ -29,17 +29,19 @@ uv sync
 
 ### Local Mode
 ```bash
-uv run uvicorn platform_service.main:app --host 0.0.0.0 --port 8000 --reload
+uv run python -m platform_service.main --host 0.0.0.0 --port 8000
 ```
 
 ### With Bittensor Arguments
 ```bash
-uv run uvicorn platform_service.main:app --host 0.0.0.0 --port 8000 -- \
+uv run python -m platform_service.main \
+    --host 0.0.0.0 \
+    --port 8000 \
     --rpc_url wss://sepolia.infura.io/ws/v3/your_api_key \
     --wallet.name your_wallet \
     --wallet.hotkey your_hotkey \
-    --netuid 21 \
-    --subtensor.network testnet
+    --netuid 2 \
+    --subtensor.network local
 ```
 
 ## API Documentation

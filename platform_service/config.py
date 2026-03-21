@@ -25,10 +25,18 @@ def get_config():
         default=60,
         help="Interval for validator to poll invariants",
     )
+
     parser.add_argument(
-        "--mock",
-        action="store_true",
-        help="Run with mock wallet and metagraph",
+        "--host",
+        type=str,
+        default="0.0.0.0",
+        help="Host for the Platform API",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port for the Platform API",
     )
 
     # Bittensor settings

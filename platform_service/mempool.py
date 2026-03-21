@@ -1,6 +1,6 @@
 import asyncio
 import json
-from web3 import AsyncWeb3, Web3
+from web3 import AsyncWeb3, Web3, WebSocketProvider
 from bittensor.utils.btlogging import logging
 from typing import List, Callable
 from platform_service.database import SessionLocal, InvariantRecord
@@ -14,29 +14,28 @@ async def mempool_worker(
     """
     logging.info(f"Connecting to mempool at {rpc_url}")
 
-    try:
-        # Use AsyncWeb3 for subscription
-        w3 = AsyncWeb3(AsyncWeb3.WebSocketProvider(rpc_url))
+    while True:
+        try:
+            async with AsyncWeb3(WebSocketProvider(rpc_url)) as w3:
+                # Subscribe to pending transactions
+                await w3.eth.subscribe("drpc_pendingTransactions")
+                logging.info("Subscribed to newPendingTransactions")
 
-        # In a real scenario, we'd use w3.eth.subscribe('pending_transactions')
-        # But some nodes don't support it directly. We'll use a loop for now.
+                async for response in w3.socket.process_subscriptions():
+                    try:
+                        raw_tx = response["result"]
+                        logging.debug(
+                            f"Receive pending transaction: {Web3.to_hex(raw_tx['hash'])}"
+                        )
+                        tx_json = Web3.to_json(raw_tx)
+                        await queue.put(json.loads(tx_json))
+                    except Exception as e:
+                        logging.error(f"Error processing transaction: {e}")
 
-        async for tx_hash in w3.eth.subscribe("pending_transactions"):
-            try:
-                tx = await w3.eth.get_transaction(tx_hash)
-                if tx:
-                    logging.info(f"Matched monitored contract: {tx['to']}")
-                    # Convert AttributeDict/HexBytes to serializable dict
-                    tx_json = Web3.to_json(tx)
-                    await queue.put(json.loads(tx_json))
-            except Exception as e:
-                logging.error(f"Error processing transaction {tx_hash.hex()}: {e}")
-
-    except Exception as e:
-        logging.error(f"Mempool connection error: {e}")
-        # Reconnection strategy would go here
-        await asyncio.sleep(5)
-        await mempool_worker(rpc_url, queue, get_monitored_contracts)
+        except Exception as e:
+            logging.error(f"Mempool connection error: {e}")
+            await asyncio.sleep(5)
+            logging.info("Retrying mempool connection...")
 
 
 def get_monitored_contracts_from_db() -> List[str]:

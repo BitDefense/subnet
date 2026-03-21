@@ -34,6 +34,8 @@ async def dispatch_loop():
             tx = await queue.get()
             await dispatcher.dispatch(tx)
             queue.task_done()
+        except asyncio.CancelledError:
+            break
         except Exception as e:
             logging.error(f"Error in dispatch loop: {e}")
             await asyncio.sleep(1)
@@ -48,6 +50,8 @@ async def sync_metagraph():
             metagraph.sync(subtensor=subtensor)
             logging.info("Metagraph synced")
             await asyncio.sleep(300)
+        except asyncio.CancelledError:
+            break
         except Exception as e:
             logging.error(f"Error syncing metagraph: {e}")
             await asyncio.sleep(60)
@@ -139,3 +143,9 @@ async def get_invariants(db: Session = Depends(get_db)):
 @app.get("/")
 async def root():
     return {"message": "BitDefense Platform API"}
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run("platform_service.main:app", host=config.host, port=config.port)
