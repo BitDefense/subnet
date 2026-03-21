@@ -30,24 +30,10 @@ from bittensor.utils.btlogging import logging
 
 # Bittensor Miner Template:
 from template.protocol import Challenge
-
-
-# --- ENGINES ---
-class InvariantsCheckEngine(ABC):
-    @abstractmethod
-    def execute_checks(self, challenge: Challenge) -> List[int]:
-        """
-        Executes the invariant checks against the provided challenge.
-        """
-        pass
-
-
-class SafeOnlyInvariantsCheckEngine(InvariantsCheckEngine):
-    def execute_checks(self, challenge: Challenge) -> List[int]:
-        """
-        Mock implementation that always returns 1 (safe) for every invariant.
-        """
-        return [1] * len(challenge.invariants)
+from neurons.miner.engine import (
+    SafeOnlyInvariantsCheckEngine,
+    RemoteInvariantsCheckEngine,
+)
 
 
 # --- MINER ---
@@ -65,11 +51,14 @@ class Miner(ABC):
         self.axon = None
         self.my_subnet_uid = None
 
-        self.engine = SafeOnlyInvariantsCheckEngine()
-
         self.config = self.get_config()
         self.setup_logging()
         self.setup_bittensor_objects()
+
+        if self.config.engine.type == "remote":
+            self.engine = RemoteInvariantsCheckEngine(self.config.engine.remote_url)
+        else:
+            self.engine = SafeOnlyInvariantsCheckEngine()
 
         self.should_exit = False
         self.is_running = False
@@ -82,6 +71,20 @@ class Miner(ABC):
         # Adds override arguments for network and netuid.
         parser.add_argument(
             "--netuid", type=int, default=1, help="The chain subnet uid."
+        )
+        # Adds engine specific arguments.
+        parser.add_argument(
+            "--engine.type",
+            type=str,
+            default="safe",
+            choices=["safe", "remote"],
+            help="Engine type: safe or remote",
+        )
+        parser.add_argument(
+            "--engine.remote_url",
+            type=str,
+            default="http://localhost:9000",
+            help="Remote engine URL",
         )
         # Adds subtensor specific arguments.
         Subtensor.add_args(parser)
@@ -155,7 +158,7 @@ class Miner(ABC):
         """
         startedAt = time.time_ns()
         try:
-            synapse.output = self.engine.execute_checks(synapse)
+            synapse.output = await self.engine.execute_checks(synapse)
             logging.info(
                 f"Challenge processed: {synapse.tx.get('hash')} in {(time.time_ns() - startedAt) / 1e6}ms"
             )

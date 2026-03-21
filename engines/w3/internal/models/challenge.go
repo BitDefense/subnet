@@ -10,10 +10,10 @@ import (
 )
 
 type Challenge struct {
-	ChainID     *big.Int     `json:"chainId"`
-	BlockNumber *big.Int     `json:"blockNumber"`
-	Tx          *Transaction `json:"tx"`
-	Invariants  []Invariant  `json:"invariants"`
+	ChainID     *big.Int                    `json:"chain_id"`
+	BlockNumber *big.Int                    `json:"block_number"`
+	Tx          *EthereumTransactionPayload `json:"tx"`
+	Invariants  []Invariant                 `json:"invariants"`
 }
 
 func (c Challenge) InvariantSlotMap() map[common.Address]map[common.Hash]*InvariantIndex {
@@ -30,61 +30,74 @@ func (c Challenge) InvariantSlotMap() map[common.Address]map[common.Hash]*Invari
 	return out
 }
 
-type Transaction struct {
-	Hash    string                     `json:"hash"`
-	Payload EthereumTransactionPayload `json:"payload"`
-}
-
 type EthereumTransactionPayload struct {
-	Type                 *hexutil.Big   `json:"type"`
-	ChainID              *hexutil.Big   `json:"chainId"`
-	Nonce                *hexutil.Big   `json:"nonce"`
-	GasPrice             *hexutil.Big   `json:"gasPrice"`
-	Gas                  *hexutil.Big   `json:"gas"`
-	MaxFeePerGas         *hexutil.Big   `json:"maxFeePerGas"`
-	MaxPriorityFeePerGas *hexutil.Big   `json:"maxPriorityFeePerGas"`
+	Type                 *big.Int       `json:"type"`
+	ChainID              *big.Int       `json:"chainId"`
+	Nonce                *big.Int       `json:"nonce"`
+	GasPrice             *big.Int       `json:"gasPrice"`
+	Gas                  *big.Int       `json:"gas"`
+	MaxFeePerGas         *big.Int       `json:"maxFeePerGas"`
+	MaxPriorityFeePerGas *big.Int       `json:"maxPriorityFeePerGas"`
 	To                   common.Address `json:"to"`
-	Value                *hexutil.Big   `json:"value"`
+	Value                *big.Int       `json:"value"`
 	Input                hexutil.Bytes  `json:"input"`
-	R                    *hexutil.Big   `json:"r"`
-	S                    *hexutil.Big   `json:"s"`
-	V                    *hexutil.Big   `json:"v"`
+	R                    common.Hash    `json:"r"`
+	S                    common.Hash    `json:"s"`
+	V                    int64          `json:"v"`
 	From                 common.Address `json:"from"`
+	Hash                 common.Hash    `json:"hash"`
 }
 
-func (t *Transaction) EthereumTx() (*types.Transaction, error) {
-	switch t.Payload.Type.ToInt().Int64() {
+func (t *EthereumTransactionPayload) EthereumTx() (*types.Transaction, error) {
+	switch t.Type.Int64() {
 	case types.LegacyTxType:
-
 		payload := types.NewTx(&types.LegacyTx{
-			Nonce:    t.Payload.Nonce.ToInt().Uint64(),
-			GasPrice: t.Payload.GasPrice.ToInt(),
-			Gas:      t.Payload.Gas.ToInt().Uint64(),
-			To:       &t.Payload.To,
-			Value:    t.Payload.Value.ToInt(),
-			Data:     t.Payload.Input,
+			Nonce:    t.Nonce.Uint64(),
+			GasPrice: t.GasPrice,
+			Gas:      t.Gas.Uint64(),
+			To:       &t.To,
+			Value:    t.Value,
+			Data:     t.Input,
 		})
 
-		signer := types.LatestSignerForChainID(t.Payload.ChainID.ToInt())
-		sig := append(t.Payload.R.ToInt().Bytes(), t.Payload.S.ToInt().Bytes()...)
-		sig = append(sig, t.Payload.V.ToInt().Bytes()...)
+		signer := types.LatestSignerForChainID(t.ChainID)
+		sig := append(t.R.Bytes(), t.S.Bytes()...)
+
+		v := byte(0x0)
+		if t.V == 1 {
+			v = byte(0x1)
+		}
+		sig = append(sig, []byte{v}...)
+
+		if len(sig) != 65 {
+			return nil, fmt.Errorf("invalid signature length: %d", len(sig))
+		}
 
 		return payload.WithSignature(signer, sig)
 	case types.DynamicFeeTxType:
 		payload := types.NewTx(&types.DynamicFeeTx{
-			ChainID:   t.Payload.ChainID.ToInt(),
-			Nonce:     t.Payload.Nonce.ToInt().Uint64(),
-			GasTipCap: t.Payload.MaxPriorityFeePerGas.ToInt(),
-			GasFeeCap: t.Payload.MaxFeePerGas.ToInt(),
-			Gas:       t.Payload.Gas.ToInt().Uint64(),
-			To:        &t.Payload.To,
-			Value:     t.Payload.Value.ToInt(),
-			Data:      t.Payload.Input,
+			ChainID:   t.ChainID,
+			Nonce:     t.Nonce.Uint64(),
+			GasTipCap: t.MaxPriorityFeePerGas,
+			GasFeeCap: t.MaxFeePerGas,
+			Gas:       t.Gas.Uint64(),
+			To:        &t.To,
+			Value:     t.Value,
+			Data:      t.Input,
 		})
 
-		signer := types.LatestSignerForChainID(t.Payload.ChainID.ToInt())
-		sig := append(t.Payload.R.ToInt().Bytes(), t.Payload.S.ToInt().Bytes()...)
-		sig = append(sig, t.Payload.V.ToInt().Bytes()...)
+		signer := types.LatestSignerForChainID(t.ChainID)
+		sig := append(t.R.Bytes(), t.S.Bytes()...)
+
+		v := byte(0x0)
+		if t.V == 1 {
+			v = byte(0x1)
+		}
+		sig = append(sig, []byte{v}...)
+
+		if len(sig) != 65 {
+			return nil, fmt.Errorf("invalid signature length: %d", len(sig))
+		}
 
 		return payload.WithSignature(signer, sig)
 	default:
@@ -93,11 +106,11 @@ func (t *Transaction) EthereumTx() (*types.Transaction, error) {
 }
 
 type Invariant struct {
-	Contract        common.Address `json:"contract"`
-	Type            string         `json:"type"`
-	Target          *big.Int       `json:"target"`
-	Storage         common.Hash    `json:"storage"`
-	StorageSlotType string         `json:"slotType"`
+	Contract common.Address `json:"contract"`
+	Type     string         `json:"type"`
+	Target   *big.Int       `json:"target"`
+	Storage  common.Hash    `json:"storage"`
+	SlotType string         `json:"slotType"`
 }
 
 type InvariantIndex struct {

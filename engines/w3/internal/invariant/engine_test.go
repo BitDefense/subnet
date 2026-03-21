@@ -14,46 +14,40 @@ import (
 )
 
 var txPayloadJson = `{
-    "chain_id": 1,
-	"block_number": 24642610,
+    "chain_id": 11155111,
+    "block_number": 10492861,
     "tx": {
-        "hash": "0x057c9958ee0d890f6bcbc11d826537cf241091248f89bf0e8d5e9344c5c42040",
-        "payload": {
-            "type": "0x2",
-            "chainId": "0x1",
-            "nonce": "0x2",
-            "gas": "0xb2a5",
-            "maxFeePerGas": "0xb1c212e",
-            "maxPriorityFeePerGas": "0x1",
-            "to": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
-            "value": "0x0",
-            "accessList": [],
-            "input": "0xa9059cbb000000000000000000000000bfef726eda93309fcc6d153b83648c827277828f0000000000000000000000000000000000000000000000000000000000000262",
-            "r": "0xbb53fea0ed2a6a56054d5f7525c204467a10b12fa3f312d27b4e4ed78d0e6eb",
-            "s": "0x71a0880775f54f860c519255478dfab8ca5f03fa8c50fc49f00634b42e7bd50",
-            "yParity": "0x1",
-            "v": "0x1",
-            "hash": "0x057c9958ee0d890f6bcbc11d826537cf241091248f89bf0e8d5e9344c5c42040",
-            "blockHash": "0x7f15a10b13565dcf386e28f909b68a655650865ebc246cc47555e4359e7f7eb0",
-            "blockNumber": "0x1780433",
-            "transactionIndex": "0xc9",
-            "from": "0x38361883863dfe69024fbb56d9e58417ef7b36e7",
-            "gasPrice": "0xa4077bd",
-            "blockTimestamp": "0x69b2eb33"
-        }
+        "from": "0x0000440f05cE7110CBAD473f71d29350106d7488",
+        "gas": 700000,
+        "gasPrice": 3500148,
+        "maxFeePerGas": 3500148,
+        "maxPriorityFeePerGas": 2000000,
+        "hash": "0xfa33e31835a7079a6b54d5e1c9aa106649693311cd7dac2c65306ea954565403",
+        "input": "0x04e45aaf000000000000000000000000fff9976782d46cc05630d1f6ebab18b2324d6b14000000000000000000000000bd18476394435d3decacabf50df360ccc479cd7900000000000000000000000000000000000000000000000000000000000000640000000000000000000000000000440f05ce7110cbad473f71d29350106d74880000000000000000000000000000000000000000000000000cfbeb3e33db000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "nonce": 42776,
+        "to": "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E",
+        "value": 0,
+        "type": 2,
+        "accessList": [],
+        "chainId": 11155111,
+        "v": 1,
+        "r": "0xb56846c8b3d63c0c2eb79a5f709ca1502b0a82153e3e9be790655a246a245fb8",
+        "s": "0x06d6b2c4da13bb8cb4994b6e991e0dc815470eed968129cfaaa055e88feda511"
     },
     "invariants": [
         {
-            "contract": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-            "type": "debt-to-collateral ratio",
-            "target": 8000,
-            "storage": "0x057c9958ee0d890f6bcbc11d826537cf241091248f89bf0e8d5e9344c5c42040"
-        },
-        {
-            "contract": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+            "contract": "0x81d40f21f12a8f0e3252bccb954d722d4c464b64",
             "type": "unauthorized minting",
             "target": 10000000000,
-            "storage": "0x057c9958ee0d890f6bcbc11d826537cf241091248f89bf0e8d5e9344c5c42040"
+            "storage": "0x325f5c7d0dbc1b2b9548e916a6eec23104865d21322b600caedb790388daaa4e",
+            "slotType": "uint256"
+        },
+        {
+            "contract": "0x81d40f21f12a8f0e3252bccb954d722d4c464b64",
+            "type": "unauthorized minting",
+            "target": 10000000000,
+            "storage": "0x325f5c7d0dbc1b2b9548e916a6eec23104865d21322b600caedb790388daaa4e",
+            "slotType": "uint256"
         }
     ]
 }`
@@ -62,7 +56,7 @@ func TestEngine_ExecuteCheck(t *testing.T) {
 	r := require.New(t)
 	ctx := context.Background()
 
-	client, err := w3.Dial("https://ethereum-rpc.publicnode.com")
+	client, err := w3.Dial("https://ethereum-sepolia-rpc.publicnode.com")
 	r.NoError(err)
 
 	engine := invariant.NewEngine(client)
