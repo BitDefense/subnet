@@ -24,7 +24,7 @@ def test_create_and_get_invariants():
         "type": "storage_check",
         "target": "balance",
         "storage": "0x1",
-        "storage_slot_type": "uint256"
+        "slot_type": "uint256"
     }
     
     # Create
