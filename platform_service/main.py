@@ -1,4 +1,5 @@
 import asyncio
+import json
 from bittensor import Wallet, Subtensor
 from bittensor.utils.btlogging import logging
 from fastapi import FastAPI, Depends, HTTPException
@@ -19,7 +20,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from contextlib import asynccontextmanager
-from web3 import AsyncWeb3, WebSocketProvider
+from web3 import AsyncWeb3, Web3, WebSocketProvider
 
 # Initialize database
 init_db()
@@ -59,6 +60,14 @@ async def block_worker(rpc_url: str):
                         async with block_lock:
                             current_block = new_block
                         logging.info(f"New block arrived: {current_block}")
+                        full_block = await w3.eth.get_block(
+                            new_block, full_transactions=True
+                        )
+                        txs = []
+                        for tx in full_block.transactions:
+                            tx_json = Web3.to_json(tx)
+                            txs.append(json.loads(tx_json))
+                        await dispatcher.dispatch(chain_id, new_block, txs)
                     except Exception as e:
                         logging.error(f"Error processing block update: {e}")
 
@@ -102,12 +111,12 @@ async def sync_metagraph(metagraph, subtensor):
             # Syncing metagraph is a blocking call, perform in thread
             await asyncio.to_thread(metagraph.sync, subtensor=subtensor)
             logging.info("Metagraph synced")
-            await asyncio.sleep(60)
+            await asyncio.sleep(10)
         except asyncio.CancelledError:
             break
         except Exception as e:
             logging.error(f"Error syncing metagraph: {e}")
-            await asyncio.sleep(60)
+            await asyncio.sleep(10)
 
 
 async def get_initial_block(rpc_url: str):
@@ -151,8 +160,8 @@ async def lifespan(app: FastAPI):
     #     mempool_worker(config.rpc_url, queue, get_monitored_contracts_from_db)
     # )
     block_task = asyncio.create_task(block_worker(config.rpc_url))
-    # dispatch_task = asyncio.create_task(dispatch_loop())
-    # metagraph_task = asyncio.create_task(sync_metagraph(metagraph, subtensor))
+    dispatch_task = asyncio.create_task(dispatch_loop())
+    metagraph_task = asyncio.create_task(sync_metagraph(metagraph, subtensor))
 
     yield
 
@@ -160,8 +169,8 @@ async def lifespan(app: FastAPI):
     logging.info("Shutting down Platform service...")
     # mempool_task.cancel()
     block_task.cancel()
-    # dispatch_task.cancel()
-    # metagraph_task.cancel()
+    dispatch_task.cancel()
+    metagraph_task.cancel()
 
     # Wait for tasks to clean up with a timeout
     try:
@@ -169,8 +178,8 @@ async def lifespan(app: FastAPI):
             asyncio.gather(
                 # mempool_task,
                 block_task,
-                # dispatch_task,
-                # metagraph_task,
+                dispatch_task,
+                metagraph_task,
                 return_exceptions=True,
             ),
             timeout=5.0,

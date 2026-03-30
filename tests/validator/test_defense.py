@@ -11,13 +11,13 @@ from neurons.validator.defense import DefenseManager, TelegramAlertAction, Pause
 @pytest.mark.asyncio
 async def test_defense_manager_fetch_and_create():
     platform_url = "http://localhost:8000"
-    api_key = "test_key"
-    manager = DefenseManager(platform_url, api_key)
+    eth_rpc_url = "http://localhost:8545"
+    manager = DefenseManager(platform_url, eth_rpc_url=eth_rpc_url)
 
     action_id = 1
     mock_action_data = {
         "id": action_id,
-        "type": "Telegram Alert",
+        "type": "TELEGRAM_ALERT",
         "network": "ethereum",
         "tg_chat_id": "123456",
     }
@@ -41,32 +41,32 @@ async def test_defense_manager_fetch_and_create():
         # Test creation
         action = manager.create_action(fetched_data)
         assert isinstance(action, TelegramAlertAction)
-        assert action.type == "Telegram Alert"
+        assert action.type == "TELEGRAM_ALERT"
 
 
 @pytest.mark.asyncio
 async def test_defense_manager_pause_action():
-    manager = DefenseManager("http://localhost:8000", "test_key")
+    manager = DefenseManager("http://localhost:8000", eth_rpc_url="http://localhost:8545")
     mock_action_data = {
         "id": 2,
-        "type": "Pause Agent",
+        "type": "PAUSE_AGENT",
         "network": "ethereum",
         "role_id": "0x123",
     }
 
     action = manager.create_action(mock_action_data)
     assert isinstance(action, PauseAgentAction)
-    assert action.type == "Pause Agent"
+    assert action.type == "PAUSE_AGENT"
 
 
 @pytest.mark.asyncio
 async def test_execute_actions():
-    manager = DefenseManager("http://localhost:8000", "test_key")
+    manager = DefenseManager("http://localhost:8000")
     action_ids = [1, 2]
 
     mock_actions = {
-        1: {"id": 1, "type": "Telegram Alert"},
-        2: {"id": 2, "type": "Pause Agent"},
+        1: {"id": 1, "type": "TELEGRAM_ALERT"},
+        2: {"id": 2, "type": "PAUSE_AGENT"},
     }
 
     async def mock_fetch(action_id):

@@ -98,7 +98,7 @@ class MempoolTransaction(bt.Synapse):
 
     chain_id: int
     block_number: int
-    tx: typing.Dict[str, typing.Any]
+    txs: typing.List[typing.Dict[str, typing.Any]]
     received: bool = False
 
     def deserialize(self) -> bool:

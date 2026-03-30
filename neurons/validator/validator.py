@@ -43,6 +43,13 @@ from neurons.validator.defense import DefenseManager
 import httpx
 
 
+class PendingTransaction:
+    def __init__(self, chain_id: int, block_number: int, tx: dict):
+        self.chain_id = chain_id
+        self.block_number = block_number
+        self.tx = tx
+
+
 def check_uid_availability(metagraph: Metagraph, uid: int) -> bool:
     """Check if uid is available. The UID should be available if it is serving and has less than vpermit_tao_limit stake."""
     if not metagraph.axons[uid].is_serving:
@@ -72,7 +79,9 @@ class Validator:
         self.platform_queue = None
 
         self.defense_manager = DefenseManager(
-            self.config.platform.url, self.config.platform.api_key
+            self.config.platform.url,
+            eth_rpc_url=self.config.eth_rpc_url,
+            eth_private_key=self.config.eth_private_key,
         )
 
         self.step = 0
@@ -96,16 +105,21 @@ class Validator:
             help="Platform API URL",
         )
         parser.add_argument(
-            "--platform.api_key",
-            type=str,
-            default="default_key",
-            help="Platform API Key",
-        )
-        parser.add_argument(
             "--polling_interval",
             type=int,
-            default=60,
+            default=5,
             help="Interval for validator to poll invariants",
+        )
+        parser.add_argument(
+            "--eth_rpc_url",
+            type=str,
+            default="https://sepolia.infura.io/v3/your_key",
+            help="Ethereum RPC URL for defense actions",
+        )
+        parser.add_argument(
+            "--eth_private_key",
+            type=str,
+            help="Ethereum private key for defense actions",
         )
         # Adds subtensor specific arguments.
         Subtensor.add_args(parser)
@@ -241,12 +255,10 @@ class Validator:
         return False, None
 
     async def mempool_handler(self, synapse: MempoolTransaction) -> MempoolTransaction:
-        logging.debug(f"Received mempool transaction: {synapse.tx.get('hash')}")
-        if self.platform_queue and self.loop:
-            self.loop.call_soon_threadsafe(self.platform_queue.put_nowait, synapse)
-        else:
-            logging.warning(
-                "Platform queue or loop not initialized, dropping transaction."
+        for tx in synapse.txs:
+            logging.debug(f"Received mempool transaction: {tx.get('hash')}")
+            self.platform_queue.put_nowait(
+                PendingTransaction(synapse.chain_id, synapse.block_number, tx)
             )
         synapse.received = True
         return synapse
@@ -258,7 +270,6 @@ class Validator:
                 async with httpx.AsyncClient() as client:
                     response = await client.get(
                         f"{self.config.platform.url}/invariants",
-                        headers={"X-API-KEY": self.config.platform.api_key},
                         timeout=10,
                     )
                     if response.status_code == 200:
@@ -279,16 +290,16 @@ class Validator:
         """Validator forward pass."""
         while True:
             try:
-                mempool_tx = await self.platform_queue.get()
+                pending_tx = await self.platform_queue.get()
                 logging.debug(
-                    f"Using mempool transaction for challenge: {mempool_tx.tx.get('hash')}"
+                    f"Using mempool transaction for challenge: {pending_tx.tx.get('hash')}"
                 )
 
                 (
                     challenge,
                     synapses,
                     miner_uids,
-                ) = await self.process_mempool_transaction(mempool_tx)
+                ) = await self.process_transaction(pending_tx)
 
                 if not miner_uids:
                     logging.warning("No available miners found.")
@@ -320,7 +331,7 @@ class Validator:
                     ground_truth.append(consensus_status)
 
                     # Trigger defense actions if violation is confirmed
-                    if consensus_status == 1:
+                    if consensus_status == 0:
                         inv_data = self.platform_invariants[i]
                         action_ids = inv_data.get("defense_action_ids", [])
                         if action_ids:
@@ -329,7 +340,9 @@ class Validator:
                             )
                             # We can run these in background to not block the forward loop
                             asyncio.create_task(
-                                self.defense_manager.execute_actions(action_ids)
+                                self.defense_manager.execute_actions(
+                                    action_ids, invariant_context=inv_data
+                                )
                             )
 
                 for idx, uid in enumerate(miner_uids):
@@ -348,7 +361,7 @@ class Validator:
                         if latency is not None:
                             stats["latencies"].append(latency)
                         for i in range(num_invariants):
-                            if len(resp) > i and ground_truth[i] is not None:
+                            if resp and ground_truth[i] is not None:
                                 stats["total_tasks"] += 1
                                 if resp[i] == ground_truth[i]:
                                     stats["true_positives"] += 1
@@ -357,7 +370,7 @@ class Validator:
             except Exception as e:
                 logging.error(f"Error in forward loop: {e}")
 
-    async def process_mempool_transaction(self, mem: MempoolTransaction):
+    async def process_transaction(self, pending_tx: PendingTransaction):
         k = random.choice([1])
         miner_uids = self.get_random_uids(k=k)
 
@@ -369,7 +382,7 @@ class Validator:
 
         try:
             # Map platform transaction to Challenge synapse
-            tx_data = mem.tx
+            tx_data = pending_tx.tx
 
             # Filter invariants for this target contract
             relevant_invariants = []
@@ -382,8 +395,8 @@ class Validator:
                 return
 
             challenge = Challenge(
-                chain_id=str(mem.chain_id),
-                block_number=str(mem.block_number),
+                chain_id=str(pending_tx.chain_id),
+                block_number=str(pending_tx.block_number),
                 tx=tx_data,
                 invariants=relevant_invariants,
             )

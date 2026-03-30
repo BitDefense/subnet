@@ -67,9 +67,27 @@ func (e *Engine) ExecuteCheck(ctx context.Context, challenge models.Challenge) (
 		// TODO: check storage slot type to proper type conversion,
 		// now we support only uint256 type.
 
-		// if new value is greater than target value, then invariant is unsafe.
-		if new.Big().Cmp(target.Target) > 0 {
-			result[target.Index] = 0
+		switch target.Type {
+		case "==":
+			if new.Big().Cmp(target.Target) != 0 {
+				result[target.Index] = 0
+			}
+		case ">=":
+			if new.Big().Cmp(target.Target) < 0 {
+				result[target.Index] = 0
+			}
+		case "<=":
+			if new.Big().Cmp(target.Target) > 0 {
+				result[target.Index] = 0
+			}
+		case ">":
+			if new.Big().Cmp(target.Target) <= 0 {
+				result[target.Index] = 0
+			}
+		case "<":
+			if new.Big().Cmp(target.Target) >= 0 {
+				result[target.Index] = 0
+			}
 		}
 	}
 

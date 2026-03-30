@@ -24,6 +24,7 @@ func (c Challenge) InvariantSlotMap() map[common.Address]map[common.Hash]*Invari
 		}
 		out[inv.Contract][inv.Storage] = &InvariantIndex{
 			Index:  idx,
+			Type:   inv.Type,
 			Target: inv.Target,
 		}
 	}
@@ -115,5 +116,6 @@ type Invariant struct {
 
 type InvariantIndex struct {
 	Index  int
+	Type   string
 	Target *big.Int
 }
