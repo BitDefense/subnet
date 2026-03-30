@@ -108,14 +108,17 @@ class PauseAgentAction(BaseDefenseAction):
         try:
             w3 = Web3(Web3.HTTPProvider(self.eth_rpc_url))
             account = w3.eth.account.from_key(self.eth_private_key)
+            gas_price = w3.eth.gas_price
+            adjusted_gas_price = int(gas_price * 1.2)
+            nonce = w3.eth.get_transaction_count(account.address)
 
             # Simple transaction build
             tx = {
                 "to": contract_address,
                 "data": calldata,
                 "gas": 200000,  # Static gas limit for MVP, could be estimated
-                "gasPrice": w3.eth.gas_price,
-                "nonce": w3.eth.get_transaction_count(account.address),
+                "gasPrice": adjusted_gas_price,
+                "nonce": nonce,
                 "chainId": w3.eth.chain_id,
             }
 

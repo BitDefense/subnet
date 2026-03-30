@@ -97,7 +97,9 @@ func (e *Engine) ExecuteCheck(ctx context.Context, challenge models.Challenge) (
 	if err != nil {
 		if strings.Contains(err.Error(), "nonce too high") ||
 			strings.Contains(err.Error(), "max fee per gas less than block base fee") ||
-			strings.Contains(err.Error(), "nonce too low") {
+			strings.Contains(err.Error(), "nonce too low") ||
+			strings.Contains(err.Error(), "insufficient funds") ||
+			strings.Contains(err.Error(), "execution reverted") {
 
 			e.markStaleTx(challenge.Tx.Hash)
 

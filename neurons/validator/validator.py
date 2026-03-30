@@ -286,13 +286,14 @@ class Validator:
 
             await asyncio.sleep(self.config.polling_interval)
 
-    async def forward_loop(self):
-        """Validator forward pass."""
+    async def forward_worker(self, worker_id: int):
+        """Validator forward worker."""
+        logging.info(f"Worker {worker_id} started")
         while True:
             try:
                 pending_tx = await self.platform_queue.get()
                 logging.debug(
-                    f"Using mempool transaction for challenge: {pending_tx.tx.get('hash')}"
+                    f"Worker {worker_id} using mempool transaction for challenge: {pending_tx.tx.get('hash')}"
                 )
 
                 (
@@ -303,10 +304,12 @@ class Validator:
 
                 if not miner_uids:
                     logging.warning("No available miners found.")
+                    self.platform_queue.task_done()
                     continue
 
                 if not challenge:
                     logging.warning("No challenge created.")
+                    self.platform_queue.task_done()
                     continue
 
                 num_invariants = len(challenge.invariants)
@@ -345,30 +348,31 @@ class Validator:
                                 )
                             )
 
-                for idx, uid in enumerate(miner_uids):
-                    if uid not in self.miner_stats:
-                        self.miner_stats[uid] = {
-                            "processed_tx_hashes": set(),
-                            "true_positives": 0,
-                            "total_tasks": 0,
-                            "latencies": [],
-                        }
-                    stats = self.miner_stats[uid]
-                    resp = responses[idx]
-                    latency = latencies[idx]
-                    if resp:
-                        stats["processed_tx_hashes"].add(challenge.tx.get("hash"))
-                        if latency is not None:
-                            stats["latencies"].append(latency)
-                        for i in range(num_invariants):
-                            if resp and ground_truth[i] is not None:
-                                stats["total_tasks"] += 1
-                                if resp[i] == ground_truth[i]:
-                                    stats["true_positives"] += 1
+                async with self.lock:
+                    for idx, uid in enumerate(miner_uids):
+                        if uid not in self.miner_stats:
+                            self.miner_stats[uid] = {
+                                "processed_tx_hashes": set(),
+                                "true_positives": 0,
+                                "total_tasks": 0,
+                                "latencies": [],
+                            }
+                        stats = self.miner_stats[uid]
+                        resp = responses[idx]
+                        latency = latencies[idx]
+                        if resp:
+                            stats["processed_tx_hashes"].add(challenge.tx.get("hash"))
+                            if latency is not None:
+                                stats["latencies"].append(latency)
+                            for i in range(num_invariants):
+                                if resp and ground_truth[i] is not None:
+                                    stats["total_tasks"] += 1
+                                    if resp[i] == ground_truth[i]:
+                                        stats["true_positives"] += 1
 
                 self.platform_queue.task_done()
             except Exception as e:
-                logging.error(f"Error in forward loop: {e}")
+                logging.error(f"Error in worker {worker_id}: {e}")
 
     async def process_transaction(self, pending_tx: PendingTransaction):
         k = random.choice([1])
@@ -404,15 +408,15 @@ class Validator:
             logging.error(f"Error building challenge from platform transaction: {e}")
             return
 
-        logging.info(
-            f"Querying {len(miner_uids)} miners with challenge {challenge.tx.get('hash')}"
-        )
-
         synapses = await self.dendrite.forward(
             axons=[self.metagraph.axons[uid] for uid in miner_uids],
             synapse=challenge,
             deserialize=False,
             timeout=12,
+        )
+
+        logging.info(
+            f"Miners {miner_uids} responded for challenge {challenge.tx.get('hash')}"
         )
 
         return challenge, synapses, miner_uids
@@ -488,7 +492,10 @@ class Validator:
 
         # Start background tasks
         self.loop.create_task(self.poll_invariants())
-        self.loop.create_task(self.forward_loop())
+
+        # Spawn 10 parallel workers
+        for i in range(10):
+            self.loop.create_task(self.forward_worker(i))
 
         while not self.should_exit:
             # Run blocking sync logic in a separate thread

@@ -152,7 +152,7 @@ async def get_chain_id(rpc_url: str):
 async def lifespan(app: FastAPI):
     # Start background tasks
     logging.info("Initializing Platform background tasks...")
-    # metagraph.sync(subtensor=subtensor)
+    metagraph.sync(subtensor=subtensor)
     await get_chain_id(config.rpc_url)
     await get_initial_block(config.rpc_url)
 
