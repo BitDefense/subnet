@@ -102,6 +102,86 @@ services:
       --eth_rpc_url ${ETH_RPC_URL}
       --eth_private_key ${ETH_PRIVATE_KEY}
 
+  w3_engine_1:
+    <<: *engine-template
+    environment:
+      - RPC=${ETH_RPC_URL}
+  miner_1:
+    <<: *miner-template
+    command: >
+      --wallet.name miner_1
+      --wallet.hotkey default
+      --netuid ${NETUID:-2}
+      --axon.port 9001
+      --logging.info
+      --subtensor.network ${SUBTENSOR_NETWORK:-local}
+      --engine.type remote
+      --engine.remote_url http://w3_engine_1:9000
+
+  w3_engine_2:
+    <<: *engine-template
+    environment:
+      - RPC=${ETH_RPC_URL}
+  miner_2:
+    <<: *miner-template
+    command: >
+      --wallet.name miner_2
+      --wallet.hotkey default
+      --netuid ${NETUID:-2}
+      --axon.port 9002
+      --logging.info
+      --subtensor.network ${SUBTENSOR_NETWORK:-local}
+      --engine.type remote
+      --engine.remote_url http://w3_engine_2:9000
+
+  w3_engine_3:
+    <<: *engine-template
+    environment:
+      - RPC=${ETH_RPC_URL}
+  miner_3:
+    <<: *miner-template
+    command: >
+      --wallet.name miner_3
+      --wallet.hotkey default
+      --netuid ${NETUID:-2}
+      --axon.port 9003
+      --logging.info
+      --subtensor.network ${SUBTENSOR_NETWORK:-local}
+      --engine.type remote
+      --engine.remote_url http://w3_engine_3:9000
+
+  w3_engine_4:
+    <<: *engine-template
+    environment:
+      - RPC=${ETH_RPC_URL}
+  miner_4:
+    <<: *miner-template
+    command: >
+      --wallet.name miner_4
+      --wallet.hotkey default
+      --netuid ${NETUID:-2}
+      --axon.port 9004
+      --logging.info
+      --subtensor.network ${SUBTENSOR_NETWORK:-local}
+      --engine.type remote
+      --engine.remote_url http://w3_engine_4:9000
+
+  w3_engine_5:
+    <<: *engine-template
+    environment:
+      - RPC=${ETH_RPC_URL}
+  miner_5:
+    <<: *miner-template
+    command: >
+      --wallet.name miner_5
+      --wallet.hotkey default
+      --netuid ${NETUID:-2}
+      --axon.port 9005
+      --logging.info
+      --subtensor.network ${SUBTENSOR_NETWORK:-local}
+      --engine.type remote
+      --engine.remote_url http://w3_engine_5:9000
+
 networks:
   bitdefense-net:
     driver: bridge
