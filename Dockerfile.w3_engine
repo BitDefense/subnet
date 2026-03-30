@@ -1,0 +1,28 @@
+# Build stage
+FROM golang:1.22-bookworm AS builder
+
+WORKDIR /app
+
+# Copy go mod files
+COPY engines/w3/go.mod engines/w3/go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY engines/w3/ ./
+
+# Build the application
+RUN CGO_ENABLED=0 GOOS=linux go build -o w3-engine cmd/main.go
+
+# Final stage
+FROM debian:bookworm-slim
+
+WORKDIR /app
+
+# Copy the binary from the builder
+COPY --from=builder /app/w3-engine .
+
+# Expose the engine port
+EXPOSE 9000
+
+# Start the engine
+ENTRYPOINT ["./w3-engine"]
