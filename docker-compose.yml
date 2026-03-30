@@ -57,6 +57,51 @@ services:
       --subtensor.network ${SUBTENSOR_NETWORK:-local}
       --logging.info
 
+  validator_1:
+    build:
+      context: .
+      dockerfile: Dockerfile.validator
+    <<: *python-base
+    command: >
+      --wallet.name ${VALIDATOR_WALLET_NAME:-validator}
+      --wallet.hotkey default
+      --netuid ${NETUID:-2}
+      --axon.port 8901
+      --logging.info
+      --subtensor.network ${SUBTENSOR_NETWORK:-local}
+      --eth_rpc_url ${ETH_RPC_URL}
+      --eth_private_key ${ETH_PRIVATE_KEY}
+
+  validator_2:
+    build:
+      context: .
+      dockerfile: Dockerfile.validator
+    <<: *python-base
+    command: >
+      --wallet.name ${VALIDATOR_WALLET_NAME:-validator}
+      --wallet.hotkey hotkey_2
+      --netuid ${NETUID:-2}
+      --axon.port 8902
+      --logging.info
+      --subtensor.network ${SUBTENSOR_NETWORK:-local}
+      --eth_rpc_url ${ETH_RPC_URL}
+      --eth_private_key ${ETH_PRIVATE_KEY}
+
+  validator_3:
+    build:
+      context: .
+      dockerfile: Dockerfile.validator
+    <<: *python-base
+    command: >
+      --wallet.name ${VALIDATOR_WALLET_NAME:-validator}
+      --wallet.hotkey hotkey_3
+      --netuid ${NETUID:-2}
+      --axon.port 8903
+      --logging.info
+      --subtensor.network ${SUBTENSOR_NETWORK:-local}
+      --eth_rpc_url ${ETH_RPC_URL}
+      --eth_private_key ${ETH_PRIVATE_KEY}
+
 networks:
   bitdefense-net:
     driver: bridge
