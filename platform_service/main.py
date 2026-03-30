@@ -2,8 +2,16 @@ import asyncio
 from bittensor import Wallet, Subtensor
 from bittensor.utils.btlogging import logging
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from platform_service.database import InvariantRecord, Dashboard, Contract, DefenseAction, SessionLocal, init_db
+from platform_service.database import (
+    InvariantRecord,
+    Dashboard,
+    Contract,
+    DefenseAction,
+    SessionLocal,
+    init_db,
+)
 from platform_service.config import get_config
 from platform_service.mempool import mempool_worker, get_monitored_contracts_from_db
 from platform_service.dispatcher import Dispatcher
@@ -135,34 +143,34 @@ async def get_chain_id(rpc_url: str):
 async def lifespan(app: FastAPI):
     # Start background tasks
     logging.info("Initializing Platform background tasks...")
-    metagraph.sync(subtensor=subtensor)
+    # metagraph.sync(subtensor=subtensor)
     await get_chain_id(config.rpc_url)
     await get_initial_block(config.rpc_url)
 
-    mempool_task = asyncio.create_task(
-        mempool_worker(config.rpc_url, queue, get_monitored_contracts_from_db)
-    )
+    # mempool_task = asyncio.create_task(
+    #     mempool_worker(config.rpc_url, queue, get_monitored_contracts_from_db)
+    # )
     block_task = asyncio.create_task(block_worker(config.rpc_url))
-    dispatch_task = asyncio.create_task(dispatch_loop())
-    metagraph_task = asyncio.create_task(sync_metagraph(metagraph, subtensor))
+    # dispatch_task = asyncio.create_task(dispatch_loop())
+    # metagraph_task = asyncio.create_task(sync_metagraph(metagraph, subtensor))
 
     yield
 
     # Shutdown sequence
     logging.info("Shutting down Platform service...")
-    mempool_task.cancel()
+    # mempool_task.cancel()
     block_task.cancel()
-    dispatch_task.cancel()
-    metagraph_task.cancel()
+    # dispatch_task.cancel()
+    # metagraph_task.cancel()
 
     # Wait for tasks to clean up with a timeout
     try:
         await asyncio.wait_for(
             asyncio.gather(
-                mempool_task,
+                # mempool_task,
                 block_task,
-                dispatch_task,
-                metagraph_task,
+                # dispatch_task,
+                # metagraph_task,
                 return_exceptions=True,
             ),
             timeout=5.0,
@@ -182,6 +190,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # Dependency
 def get_db():
@@ -196,6 +212,7 @@ class InvariantSchema(BaseModel):
     contract: str
     type: str
     target: str
+    variable: str
     storage: str
     slot_type: str
     network: str = "ethereum"
@@ -287,7 +304,11 @@ async def create_invariant(inv: InvariantSchema, db: Session = Depends(get_db)):
     data = inv.model_dump(exclude={"defense_action_ids"})
     db_inv = InvariantRecord(**data)
     if inv.defense_action_ids:
-        actions = db.query(DefenseAction).filter(DefenseAction.id.in_(inv.defense_action_ids)).all()
+        actions = (
+            db.query(DefenseAction)
+            .filter(DefenseAction.id.in_(inv.defense_action_ids))
+            .all()
+        )
         db_inv.defense_actions = actions
     db.add(db_inv)
     db.commit()
@@ -309,7 +330,9 @@ async def get_invariant(id: int, db: Session = Depends(get_db)):
 
 
 @app.put("/invariants/{id}", response_model=InvariantResponse)
-async def update_invariant(id: int, inv: InvariantSchema, db: Session = Depends(get_db)):
+async def update_invariant(
+    id: int, inv: InvariantSchema, db: Session = Depends(get_db)
+):
     db_inv = db.query(InvariantRecord).filter(InvariantRecord.id == id).first()
     if not db_inv:
         raise HTTPException(status_code=404, detail="Invariant not found")
@@ -318,7 +341,11 @@ async def update_invariant(id: int, inv: InvariantSchema, db: Session = Depends(
         setattr(db_inv, key, value)
 
     if inv.defense_action_ids is not None:
-        actions = db.query(DefenseAction).filter(DefenseAction.id.in_(inv.defense_action_ids)).all()
+        actions = (
+            db.query(DefenseAction)
+            .filter(DefenseAction.id.in_(inv.defense_action_ids))
+            .all()
+        )
         db_inv.defense_actions = actions
 
     db.commit()
@@ -342,7 +369,11 @@ async def create_contract(contract: ContractCreate, db: Session = Depends(get_db
     data = contract.model_dump(exclude={"invariant_ids"})
     db_contract = Contract(**data)
     if contract.invariant_ids:
-        invs = db.query(InvariantRecord).filter(InvariantRecord.id.in_(contract.invariant_ids)).all()
+        invs = (
+            db.query(InvariantRecord)
+            .filter(InvariantRecord.id.in_(contract.invariant_ids))
+            .all()
+        )
         db_contract.invariants = invs
     db.add(db_contract)
     db.commit()
@@ -364,7 +395,9 @@ async def get_contract(id: int, db: Session = Depends(get_db)):
 
 
 @app.put("/contracts/{id}", response_model=ContractResponse)
-async def update_contract(id: int, contract: ContractCreate, db: Session = Depends(get_db)):
+async def update_contract(
+    id: int, contract: ContractCreate, db: Session = Depends(get_db)
+):
     db_contract = db.query(Contract).filter(Contract.id == id).first()
     if not db_contract:
         raise HTTPException(status_code=404, detail="Contract not found")
@@ -373,7 +406,11 @@ async def update_contract(id: int, contract: ContractCreate, db: Session = Depen
         setattr(db_contract, key, value)
 
     if contract.invariant_ids is not None:
-        invs = db.query(InvariantRecord).filter(InvariantRecord.id.in_(contract.invariant_ids)).all()
+        invs = (
+            db.query(InvariantRecord)
+            .filter(InvariantRecord.id.in_(contract.invariant_ids))
+            .all()
+        )
         db_contract.invariants = invs
 
     db.commit()
@@ -393,7 +430,9 @@ async def delete_contract(id: int, db: Session = Depends(get_db)):
 
 # --- Defense Actions CRUD ---
 @app.post("/defense-actions", response_model=DefenseActionResponse)
-async def create_defense_action(action: DefenseActionCreate, db: Session = Depends(get_db)):
+async def create_defense_action(
+    action: DefenseActionCreate, db: Session = Depends(get_db)
+):
     db_action = DefenseAction(**action.model_dump())
     db.add(db_action)
     db.commit()
@@ -415,7 +454,9 @@ async def get_defense_action(id: int, db: Session = Depends(get_db)):
 
 
 @app.put("/defense-actions/{id}", response_model=DefenseActionResponse)
-async def update_defense_action(id: int, action: DefenseActionCreate, db: Session = Depends(get_db)):
+async def update_defense_action(
+    id: int, action: DefenseActionCreate, db: Session = Depends(get_db)
+):
     db_action = db.query(DefenseAction).filter(DefenseAction.id == id).first()
     if not db_action:
         raise HTTPException(status_code=404, detail="Defense Action not found")
@@ -441,15 +482,27 @@ async def delete_defense_action(id: int, db: Session = Depends(get_db)):
 # --- Dashboards CRUD ---
 @app.post("/dashboards", response_model=DashboardResponse)
 async def create_dashboard(dash: DashboardCreate, db: Session = Depends(get_db)):
-    data = dash.model_dump(exclude={"contract_ids", "invariant_ids", "defense_action_ids"})
+    data = dash.model_dump(
+        exclude={"contract_ids", "invariant_ids", "defense_action_ids"}
+    )
     db_dash = Dashboard(**data)
 
     if dash.contract_ids:
-        db_dash.contracts = db.query(Contract).filter(Contract.id.in_(dash.contract_ids)).all()
+        db_dash.contracts = (
+            db.query(Contract).filter(Contract.id.in_(dash.contract_ids)).all()
+        )
     if dash.invariant_ids:
-        db_dash.invariants = db.query(InvariantRecord).filter(InvariantRecord.id.in_(dash.invariant_ids)).all()
+        db_dash.invariants = (
+            db.query(InvariantRecord)
+            .filter(InvariantRecord.id.in_(dash.invariant_ids))
+            .all()
+        )
     if dash.defense_action_ids:
-        db_dash.defense_actions = db.query(DefenseAction).filter(DefenseAction.id.in_(dash.defense_action_ids)).all()
+        db_dash.defense_actions = (
+            db.query(DefenseAction)
+            .filter(DefenseAction.id.in_(dash.defense_action_ids))
+            .all()
+        )
 
     db.add(db_dash)
     db.commit()
@@ -487,12 +540,14 @@ async def get_dashboard(id: int, db: Session = Depends(get_db)):
         "name": db_dash.name,
         "contracts": all_contracts,
         "invariants": list(all_invariants),
-        "defense_actions": list(all_actions)
+        "defense_actions": list(all_actions),
     }
 
 
 @app.put("/dashboards/{id}", response_model=DashboardResponse)
-async def update_dashboard(id: int, dash: DashboardCreate, db: Session = Depends(get_db)):
+async def update_dashboard(
+    id: int, dash: DashboardCreate, db: Session = Depends(get_db)
+):
     db_dash = db.query(Dashboard).filter(Dashboard.id == id).first()
     if not db_dash:
         raise HTTPException(status_code=404, detail="Dashboard not found")
@@ -500,11 +555,21 @@ async def update_dashboard(id: int, dash: DashboardCreate, db: Session = Depends
     db_dash.name = dash.name
 
     if dash.contract_ids is not None:
-        db_dash.contracts = db.query(Contract).filter(Contract.id.in_(dash.contract_ids)).all()
+        db_dash.contracts = (
+            db.query(Contract).filter(Contract.id.in_(dash.contract_ids)).all()
+        )
     if dash.invariant_ids is not None:
-        db_dash.invariants = db.query(InvariantRecord).filter(InvariantRecord.id.in_(dash.invariant_ids)).all()
+        db_dash.invariants = (
+            db.query(InvariantRecord)
+            .filter(InvariantRecord.id.in_(dash.invariant_ids))
+            .all()
+        )
     if dash.defense_action_ids is not None:
-        db_dash.defense_actions = db.query(DefenseAction).filter(DefenseAction.id.in_(dash.defense_action_ids)).all()
+        db_dash.defense_actions = (
+            db.query(DefenseAction)
+            .filter(DefenseAction.id.in_(dash.defense_action_ids))
+            .all()
+        )
 
     db.commit()
     db.refresh(db_dash)
@@ -523,7 +588,9 @@ async def delete_dashboard(id: int, db: Session = Depends(get_db)):
 
 # --- Relationship Management (Task 4) ---
 @app.post("/dashboards/{id}/contracts/{contract_id}")
-async def link_dashboard_contract(id: int, contract_id: int, db: Session = Depends(get_db)):
+async def link_dashboard_contract(
+    id: int, contract_id: int, db: Session = Depends(get_db)
+):
     db_dash = db.query(Dashboard).filter(Dashboard.id == id).first()
     db_contract = db.query(Contract).filter(Contract.id == contract_id).first()
     if not db_dash or not db_contract:
@@ -535,7 +602,9 @@ async def link_dashboard_contract(id: int, contract_id: int, db: Session = Depen
 
 
 @app.delete("/dashboards/{id}/contracts/{contract_id}")
-async def unlink_dashboard_contract(id: int, contract_id: int, db: Session = Depends(get_db)):
+async def unlink_dashboard_contract(
+    id: int, contract_id: int, db: Session = Depends(get_db)
+):
     db_dash = db.query(Dashboard).filter(Dashboard.id == id).first()
     db_contract = db.query(Contract).filter(Contract.id == contract_id).first()
     if not db_dash or not db_contract:
@@ -559,7 +628,9 @@ async def link_contract_invariant(id: int, inv_id: int, db: Session = Depends(ge
 
 
 @app.delete("/contracts/{id}/invariants/{inv_id}")
-async def unlink_contract_invariant(id: int, inv_id: int, db: Session = Depends(get_db)):
+async def unlink_contract_invariant(
+    id: int, inv_id: int, db: Session = Depends(get_db)
+):
     db_contract = db.query(Contract).filter(Contract.id == id).first()
     db_inv = db.query(InvariantRecord).filter(InvariantRecord.id == inv_id).first()
     if not db_contract or not db_inv:
@@ -575,7 +646,9 @@ async def link_invariant_action(id: int, action_id: int, db: Session = Depends(g
     db_inv = db.query(InvariantRecord).filter(InvariantRecord.id == id).first()
     db_action = db.query(DefenseAction).filter(DefenseAction.id == action_id).first()
     if not db_inv or not db_action:
-        raise HTTPException(status_code=404, detail="Invariant or Defense Action not found")
+        raise HTTPException(
+            status_code=404, detail="Invariant or Defense Action not found"
+        )
     if db_action not in db_inv.defense_actions:
         db_inv.defense_actions.append(db_action)
         db.commit()
@@ -583,11 +656,15 @@ async def link_invariant_action(id: int, action_id: int, db: Session = Depends(g
 
 
 @app.delete("/invariants/{id}/defense-actions/{action_id}")
-async def unlink_invariant_action(id: int, action_id: int, db: Session = Depends(get_db)):
+async def unlink_invariant_action(
+    id: int, action_id: int, db: Session = Depends(get_db)
+):
     db_inv = db.query(InvariantRecord).filter(InvariantRecord.id == id).first()
     db_action = db.query(DefenseAction).filter(DefenseAction.id == action_id).first()
     if not db_inv or not db_action:
-        raise HTTPException(status_code=404, detail="Invariant or Defense Action not found")
+        raise HTTPException(
+            status_code=404, detail="Invariant or Defense Action not found"
+        )
     if db_action in db_inv.defense_actions:
         db_inv.defense_actions.remove(db_action)
         db.commit()
