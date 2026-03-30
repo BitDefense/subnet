@@ -39,6 +39,7 @@ from template.protocol import (
 )
 
 from neurons.validator.reward import get_reward
+from neurons.validator.defense import DefenseManager
 import httpx
 
 
@@ -69,6 +70,10 @@ class Validator:
         self.platform_invariants = []
         # Queue will be initialized in the thread where the loop runs
         self.platform_queue = None
+
+        self.defense_manager = DefenseManager(
+            self.config.platform.url, self.config.platform.api_key
+        )
 
         self.step = 0
         self.loop = None
@@ -313,6 +318,19 @@ class Validator:
                                 consensus_status = status
                                 break
                     ground_truth.append(consensus_status)
+
+                    # Trigger defense actions if violation is confirmed
+                    if consensus_status == 1:
+                        inv_data = self.platform_invariants[i]
+                        action_ids = inv_data.get("defense_action_ids", [])
+                        if action_ids:
+                            logging.info(
+                                f"Invariant violation confirmed for {inv_data.get('contract')}. Triggering {len(action_ids)} defense actions."
+                            )
+                            # We can run these in background to not block the forward loop
+                            asyncio.create_task(
+                                self.defense_manager.execute_actions(action_ids)
+                            )
 
                 for idx, uid in enumerate(miner_uids):
                     if uid not in self.miner_stats:
