@@ -121,6 +121,12 @@ class Validator:
             type=str,
             help="Ethereum private key for defense actions",
         )
+        parser.add_argument(
+            "--workers",
+            type=int,
+            default=1,
+            help="Number of parallel workers",
+        )
         # Adds subtensor specific arguments.
         Subtensor.add_args(parser)
         # Adds logging specific arguments.
@@ -292,6 +298,28 @@ class Validator:
         while True:
             try:
                 pending_tx = await self.platform_queue.get()
+
+                if len(self.platform_invariants) == 0:
+                    logging.debug(
+                        f"Worker {worker_id} no invariants found. Skipping transaction: {pending_tx.tx.get('hash')}"
+                    )
+                    self.platform_queue.task_done()
+                    continue
+
+                # Add invariants contract check
+                tx_to = (pending_tx.tx.get("to") or "").lower()
+                relevant_full_invariants = [
+                    inv
+                    for inv in self.platform_invariants
+                    if inv.get("contract", "").lower() == tx_to
+                ]
+                if len(relevant_full_invariants) == 0:
+                    logging.debug(
+                        f"Transaction to {tx_to} not in tracked invariants. Skipping."
+                    )
+                    self.platform_queue.task_done()
+                    continue
+
                 logging.debug(
                     f"Worker {worker_id} using mempool transaction for challenge: {pending_tx.tx.get('hash')}"
                 )
@@ -375,7 +403,7 @@ class Validator:
                 logging.error(f"Error in worker {worker_id}: {e}")
 
     async def process_transaction(self, pending_tx: PendingTransaction):
-        k = random.choice([3])
+        k = random.choice([3, 5, 7, 9])
         miner_uids = self.get_random_uids(k=k)
 
         if miner_uids is None or len(miner_uids) == 0:
@@ -408,15 +436,17 @@ class Validator:
             logging.error(f"Error building challenge from platform transaction: {e}")
             return None, [], []
 
+        startedAt = time.time_ns()
         synapses = await self.dendrite.forward(
             axons=[self.metagraph.axons[uid] for uid in miner_uids],
             synapse=challenge,
             deserialize=False,
             timeout=12,
+            run_async=True,
         )
 
         logging.info(
-            f"Miners {miner_uids} responded for challenge {challenge.tx.get('hash')}"
+            f"Miners {miner_uids} responded for challenge {challenge.tx.get('hash')} in {(time.time_ns() - startedAt) / 1e6}ms"
         )
 
         return challenge, synapses, miner_uids
@@ -494,7 +524,7 @@ class Validator:
         self.loop.create_task(self.poll_invariants())
 
         # Spawn 10 parallel workers
-        for i in range(10):
+        for i in range(self.config.workers):
             self.loop.create_task(self.forward_worker(i))
 
         while not self.should_exit:

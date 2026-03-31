@@ -58,8 +58,7 @@ class TelegramAlertAction(BaseDefenseAction):
         if invariant_context:
             message += "*Invariant Violation Detected!*\n"
             message += f"• Contract: `{invariant_context.get('contract')}`\n"
-            message += f"• Variable: `{invariant_context.get('variable')}`\n"
-            message += f"• Condition: {invariant_context.get('type')} {invariant_context.get('target')}\n"
+            message += f"• Condition: {invariant_context.get('variable')} {invariant_context.get('type')} {invariant_context.get('target')}\n"
             message += f"• Network: {invariant_context.get('network')}\n"
         else:
             message += "Unknown invariant violation detected."
