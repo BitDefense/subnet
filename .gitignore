@@ -171,3 +171,4 @@ skills-lock.json
 GEMINI.md
 wallets/
 .wallets_setup
+.DS_Store

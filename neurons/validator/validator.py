@@ -510,7 +510,7 @@ class Validator:
             period=self.tempo,  # Good for fast blocks - otherwise make sure to set proper period or remove this argument completely
         )
         if response.success:
-            logging.success(f"Weights set successfully. Fee: {response.extrinsic_fee}")
+            logging.success(f"Weights set successfully. Extrinsic: {response}")
         else:
             logging.error(
                 f"Failed to set weights: {response.error} - {response.message}"
