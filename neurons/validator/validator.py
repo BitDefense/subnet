@@ -302,7 +302,7 @@ class Validator:
                     miner_uids,
                 ) = await self.process_transaction(pending_tx)
 
-                if not miner_uids:
+                if miner_uids is None or len(miner_uids) == 0:
                     logging.warning("No available miners found.")
                     self.platform_queue.task_done()
                     continue
@@ -378,7 +378,7 @@ class Validator:
         k = random.choice([3])
         miner_uids = self.get_random_uids(k=k)
 
-        if not miner_uids:
+        if miner_uids is None or len(miner_uids) == 0:
             return None, [], []
 
         # Try to get transaction from platform_queue
