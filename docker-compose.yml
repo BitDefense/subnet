@@ -71,6 +71,7 @@ services:
       --subtensor.network ${SUBTENSOR_NETWORK:-local}
       --eth_rpc_url ${ETH_RPC_URL}
       --eth_private_key ${ETH_PRIVATE_KEY}
+      --platform.url ${PLATFORM_URL:-http://platform:8000}
 
   validator_2:
     build:
@@ -86,6 +87,7 @@ services:
       --subtensor.network ${SUBTENSOR_NETWORK:-local}
       --eth_rpc_url ${ETH_RPC_URL}
       --eth_private_key ${ETH_PRIVATE_KEY}
+      --platform.url ${PLATFORM_URL:-http://platform:8000}
 
   validator_3:
     build:
@@ -101,6 +103,7 @@ services:
       --subtensor.network ${SUBTENSOR_NETWORK:-local}
       --eth_rpc_url ${ETH_RPC_URL}
       --eth_private_key ${ETH_PRIVATE_KEY}
+      --platform.url ${PLATFORM_URL:-http://platform:8000}
 
   w3_engine_1:
     <<: *engine-template

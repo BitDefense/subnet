@@ -30,4 +30,4 @@ ENV PYTHONPATH="/app"
 EXPOSE 8000
 
 # Start the Platform service
-ENTRYPOINT ["uv", "run", "python", "-m", "platform_service.main"]
+ENTRYPOINT ["python", "-m", "platform_service.main"]
