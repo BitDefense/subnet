@@ -1,9 +1,7 @@
-version: '3.8'
-
 x-python-base: &python-base
   env_file: .env
   volumes:
-    - bittensor_wallets:/root/.bittensor/wallets
+    - ~/.bittensor/wallets:/root/.bittensor/wallets
   networks:
     - bitdefense-net
 
@@ -59,6 +57,7 @@ services:
       --wallet.hotkey ${PLATFORM_WALLET_HOTKEY:-default}
       --netuid ${NETUID:-2}
       --subtensor.network ${SUBTENSOR_NETWORK:-local}
+      --database_url postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db/platform
       --logging.info
 
   validator_1:
@@ -67,8 +66,10 @@ services:
       dockerfile: Dockerfile.validator
     image: bitdefense-validator:v0.1.0
     <<: *python-base
+    ports:
+      - "8901:8901"      
     command: >
-      --wallet.name ${VALIDATOR_WALLET_NAME:-validator}
+      --wallet.name validator_1
       --wallet.hotkey default
       --netuid ${NETUID:-2}
       --axon.port 8901
@@ -84,9 +85,11 @@ services:
       dockerfile: Dockerfile.validator
     image: bitdefense-validator:v0.1.0
     <<: *python-base
+    ports:
+      - "8902:8902"      
     command: >
-      --wallet.name ${VALIDATOR_WALLET_NAME:-validator}
-      --wallet.hotkey hotkey_2
+      --wallet.name validator_2
+      --wallet.hotkey default
       --netuid ${NETUID:-2}
       --axon.port 8902
       --logging.info
@@ -101,9 +104,11 @@ services:
       dockerfile: Dockerfile.validator
     image: bitdefense-validator:v0.1.0
     <<: *python-base
+    ports:
+      - "8903:8903"      
     command: >
-      --wallet.name ${VALIDATOR_WALLET_NAME:-validator}
-      --wallet.hotkey hotkey_3
+      --wallet.name validator_3
+      --wallet.hotkey default
       --netuid ${NETUID:-2}
       --axon.port 8903
       --logging.info
@@ -118,6 +123,8 @@ services:
       - RPC=${MINER_1_ETH_RPC_URL}
   miner_1:
     <<: *miner-template
+    ports:
+      - "9001:9001"      
     command: >
       --wallet.name miner_1
       --wallet.hotkey default
@@ -134,6 +141,8 @@ services:
       - RPC=${MINER_2_ETH_RPC_URL}
   miner_2:
     <<: *miner-template
+    ports:
+      - "9002:9002"      
     command: >
       --wallet.name miner_2
       --wallet.hotkey default
@@ -150,6 +159,8 @@ services:
       - RPC=${MINER_3_ETH_RPC_URL}
   miner_3:
     <<: *miner-template
+    ports:
+      - "9003:9003"      
     command: >
       --wallet.name miner_3
       --wallet.hotkey default
@@ -166,6 +177,8 @@ services:
       - RPC=${MINER_4_ETH_RPC_URL}
   miner_4:
     <<: *miner-template
+    ports:
+      - "9004:9004"      
     command: >
       --wallet.name miner_4
       --wallet.hotkey default
@@ -182,6 +195,8 @@ services:
       - RPC=${MINER_5_ETH_RPC_URL}
   miner_5:
     <<: *miner-template
+    ports:
+      - "9005:9005"      
     command: >
       --wallet.name miner_5
       --wallet.hotkey default
@@ -198,6 +213,8 @@ services:
       - RPC=${MINER_6_ETH_RPC_URL}
   miner_6:
     <<: *miner-template
+    ports:
+      - "9006:9006"      
     command: >
       --wallet.name miner_6
       --wallet.hotkey default
@@ -214,6 +231,8 @@ services:
       - RPC=${MINER_7_ETH_RPC_URL}
   miner_7:
     <<: *miner-template
+    ports:
+      - "9007:9007"      
     command: >
       --wallet.name miner_7
       --wallet.hotkey default
@@ -230,6 +249,8 @@ services:
       - RPC=${MINER_8_ETH_RPC_URL}
   miner_8:
     <<: *miner-template
+    ports:
+      - "9008:9008"      
     command: >
       --wallet.name miner_8
       --wallet.hotkey default
@@ -246,6 +267,8 @@ services:
       - RPC=${MINER_9_ETH_RPC_URL}
   miner_9:
     <<: *miner-template
+    ports:
+      - "9009:9009"      
     command: >
       --wallet.name miner_9
       --wallet.hotkey default
@@ -262,6 +285,8 @@ services:
       - RPC=${MINER_10_ETH_RPC_URL}
   miner_10:
     <<: *miner-template
+    ports:
+      - "9010:9010"      
     command: >
       --wallet.name miner_10
       --wallet.hotkey default
@@ -278,4 +303,3 @@ networks:
 
 volumes:
   postgres_data:
-  bittensor_wallets:

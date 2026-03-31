@@ -137,15 +137,25 @@ class DefenseAction(Base):
     )
 
 
-engine = create_engine("sqlite:///./platform.db")
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+engine = None
+SessionLocal = None
 
 
-def init_db():
+def init_db(database_url: str):
+    global engine, SessionLocal
+    # Check for sqlite and add check_same_thread for concurrency
+    if database_url.startswith("sqlite"):
+        engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    else:
+        engine = create_engine(database_url)
+
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base.metadata.create_all(bind=engine)
 
 
 def add_invariant(invariant: InvariantRecord):
+    if SessionLocal is None:
+        raise RuntimeError("Database not initialized. Call init_db() first.")
     db = SessionLocal()
     try:
         db.add(invariant)

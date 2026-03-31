@@ -8,6 +8,8 @@ def check_uid_availability(metagraph: Metagraph, uid: int) -> bool:
         return False
     if metagraph.validator_permit[uid]:
         return True
+    if metagraph.tao_stake[uid] > 0:
+        return True
     return False
 
 

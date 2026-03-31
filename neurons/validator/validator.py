@@ -375,7 +375,7 @@ class Validator:
                 logging.error(f"Error in worker {worker_id}: {e}")
 
     async def process_transaction(self, pending_tx: PendingTransaction):
-        k = random.choice([1])
+        k = random.choice([3])
         miner_uids = self.get_random_uids(k=k)
 
         if not miner_uids:

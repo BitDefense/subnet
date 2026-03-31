@@ -39,6 +39,13 @@ def get_config():
         help="Port for the Platform API",
     )
 
+    parser.add_argument(
+        "--database_url",
+        type=str,
+        default="sqlite:///./platform.db",
+        help="Database URL (e.g., sqlite:///./platform.db or postgresql://user:pass@host/db)",
+    )
+
     # Bittensor settings
     Wallet.add_args(parser)
     Subtensor.add_args(parser)

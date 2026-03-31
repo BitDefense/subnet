@@ -10,9 +10,9 @@ from platform_service.database import (
     Dashboard,
     Contract,
     DefenseAction,
-    SessionLocal,
     init_db,
 )
+import platform_service.database as db_module
 from platform_service.config import get_config
 from platform_service.mempool import mempool_worker, get_monitored_contracts_from_db
 from platform_service.dispatcher import Dispatcher
@@ -22,11 +22,12 @@ from datetime import datetime
 from contextlib import asynccontextmanager
 from web3 import AsyncWeb3, Web3, WebSocketProvider
 
-# Initialize database
-init_db()
-
 # Global state
 config = get_config()
+
+# Initialize database
+init_db(config.database_url)
+
 wallet = Wallet(config=config)
 subtensor = Subtensor(config=config)
 metagraph = subtensor.metagraph(netuid=config.netuid)
@@ -191,9 +192,8 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logging.error(f"Error during shutdown: {e}")
     finally:
-        from platform_service.database import engine
-
-        engine.dispose()
+        if db_module.engine:
+            db_module.engine.dispose()
         logging.info("Platform service shutdown complete.")
 
 
@@ -210,7 +210,9 @@ app.add_middleware(
 
 # Dependency
 def get_db():
-    db = SessionLocal()
+    if db_module.SessionLocal is None:
+        raise RuntimeError("Database not initialized.")
+    db = db_module.SessionLocal()
     try:
         yield db
     finally:
@@ -581,7 +583,7 @@ async def update_dashboard(
         )
 
     db.commit()
-    db.refresh(db_dash)
+    db_dash.refresh(db_dash)
     return db_dash
 
 
