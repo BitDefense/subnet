@@ -128,6 +128,29 @@ Scoring is handled in `neurons/validator/reward.py`, ensuring Miners are incenti
 ![Subnet Info](docs/subnet_info.png)
 *Overview of Subnet 31 (BitDefense) on the test network, displaying stakes, incentives, and emissions for active UIDs.*
 
+### Registered Hotkeys
+
+#### Validators
+| Identity | UID | Hotkey |
+| :--- | :--- | :--- |
+| validator_1 | 1 | `5CAbcrX6dDoCLYZrXzNCU9csL8JctBxhi9oZcvtc8hqz5Pri` |
+| validator_2 | 2 | `5FjDJK421Gj8oZKkKXWkexnadqpvCxhEnjtWABakkvDS8TXB` |
+| validator_3 | 3 | `5CdDV6MiEwSf3Veu8xC4Z27usZeTWvT6Q3452Eh4hvV71oqq` |
+
+#### Miners
+| Identity | UID | Hotkey |
+| :--- | :--- | :--- |
+| miner_1 | 4 | `5FhgnUWorKmnBFJhGhgZdU1XFdo5LZH5SDEf56aErLkKCeew` |
+| miner_2 | 5 | `5DM5o384xnjsohycyLxX9umWKybCJLVoSjwzYBZ8NUwy5zXj` |
+| miner_3 | 6 | `5GsAzhqAnroU8KsuiVHR3YH2sWiMaj2n5B46Cz6NWvVpa7pN` |
+| miner_4 | 7 | `5Ejk4JD1fuN6VDNujZSLvv4UqofWVNELGDSWPUuJAWjw7qrU` |
+| miner_5 | 8 | `5D2cweLPj6JRqXohVbC8ovtNuydc5iCwehZM6FgE2XFKL4gf` |
+| miner_6 | 9 | `5HHAQa6tVWW8j3SKegwGvboXSMDkXvd8T8hB5shk2YdJhQEz` |
+| miner_7 | 10 | `5DvoujmTuxJvrPzzUF2yLXsJMbzTvoJzGHGRNhV5EEwDYNPZ` |
+| miner_8 | 11 | `5D5G6Gc11bGVxRgv1kCd37hJ7RfDqdd2gwNMEVTz2MRByHfH` |
+| miner_9 | 12 | `5HpUYpL1kpzcyx6jZ8dBa11qrp9sLMiKpoythup3EMeu8mFi` |
+| miner_10 | 13 | `5HMpsB6SwG2k1h6eyNrG8yDaj2zJ4s4c2ATiZHoBjg85Cbu2` |
+
 ## License
 This repository is licensed under the MIT License.
 ```text
