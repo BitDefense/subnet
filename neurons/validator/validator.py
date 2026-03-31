@@ -396,7 +396,7 @@ class Validator:
 
             if not relevant_invariants:
                 logging.warning("No relevant invariants for contracts")
-                return
+                return None, [], []
 
             challenge = Challenge(
                 chain_id=str(pending_tx.chain_id),
@@ -406,7 +406,7 @@ class Validator:
             )
         except Exception as e:
             logging.error(f"Error building challenge from platform transaction: {e}")
-            return
+            return None, [], []
 
         synapses = await self.dendrite.forward(
             axons=[self.metagraph.axons[uid] for uid in miner_uids],
