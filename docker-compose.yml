@@ -12,11 +12,14 @@ x-miner-template: &miner-template
   build:
     context: .
     dockerfile: Dockerfile.miner
+  image: bitdefense-miner:v0.1.0
 
 x-engine-template: &engine-template
   build:
     context: .
     dockerfile: Dockerfile.w3_engine
+  image: bitdefense-w3-engine:v0.1.0
+  env_file: .env
   networks:
     - bitdefense-net
 
@@ -41,6 +44,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.platform
+    image: bitdefense-platform:v0.1.0
     <<: *python-base
     ports:
       - "8000:8000"
@@ -50,7 +54,7 @@ services:
     command: >
       --host ${PLATFORM_HOST:-0.0.0.0}
       --port ${PLATFORM_PORT:-8000}
-      --rpc_url ${ETH_RPC_URL}
+      --rpc_url ${PLATFORM_ETH_RPC_URL}
       --wallet.name ${PLATFORM_WALLET_NAME:-default}
       --wallet.hotkey ${PLATFORM_WALLET_HOTKEY:-default}
       --netuid ${NETUID:-2}
@@ -61,6 +65,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.validator
+    image: bitdefense-validator:v0.1.0
     <<: *python-base
     command: >
       --wallet.name ${VALIDATOR_WALLET_NAME:-validator}
@@ -69,14 +74,15 @@ services:
       --axon.port 8901
       --logging.info
       --subtensor.network ${SUBTENSOR_NETWORK:-local}
-      --eth_rpc_url ${ETH_RPC_URL}
-      --eth_private_key ${ETH_PRIVATE_KEY}
+      --eth_rpc_url ${VALIDATOR_1_ETH_RPC_URL}
+      --eth_private_key ${VALIDATOR_1_ETH_PRIVATE_KEY}
       --platform.url ${PLATFORM_URL:-http://platform:8000}
 
   validator_2:
     build:
       context: .
       dockerfile: Dockerfile.validator
+    image: bitdefense-validator:v0.1.0
     <<: *python-base
     command: >
       --wallet.name ${VALIDATOR_WALLET_NAME:-validator}
@@ -85,14 +91,15 @@ services:
       --axon.port 8902
       --logging.info
       --subtensor.network ${SUBTENSOR_NETWORK:-local}
-      --eth_rpc_url ${ETH_RPC_URL}
-      --eth_private_key ${ETH_PRIVATE_KEY}
+      --eth_rpc_url ${VALIDATOR_2_ETH_RPC_URL}
+      --eth_private_key ${VALIDATOR_2_ETH_PRIVATE_KEY}
       --platform.url ${PLATFORM_URL:-http://platform:8000}
 
   validator_3:
     build:
       context: .
       dockerfile: Dockerfile.validator
+    image: bitdefense-validator:v0.1.0
     <<: *python-base
     command: >
       --wallet.name ${VALIDATOR_WALLET_NAME:-validator}
@@ -101,14 +108,14 @@ services:
       --axon.port 8903
       --logging.info
       --subtensor.network ${SUBTENSOR_NETWORK:-local}
-      --eth_rpc_url ${ETH_RPC_URL}
-      --eth_private_key ${ETH_PRIVATE_KEY}
+      --eth_rpc_url ${VALIDATOR_3_ETH_RPC_URL}
+      --eth_private_key ${VALIDATOR_3_ETH_PRIVATE_KEY}
       --platform.url ${PLATFORM_URL:-http://platform:8000}
 
   w3_engine_1:
     <<: *engine-template
     environment:
-      - RPC=${ETH_RPC_URL}
+      - RPC=${MINER_1_ETH_RPC_URL}
   miner_1:
     <<: *miner-template
     command: >
@@ -124,7 +131,7 @@ services:
   w3_engine_2:
     <<: *engine-template
     environment:
-      - RPC=${ETH_RPC_URL}
+      - RPC=${MINER_2_ETH_RPC_URL}
   miner_2:
     <<: *miner-template
     command: >
@@ -140,7 +147,7 @@ services:
   w3_engine_3:
     <<: *engine-template
     environment:
-      - RPC=${ETH_RPC_URL}
+      - RPC=${MINER_3_ETH_RPC_URL}
   miner_3:
     <<: *miner-template
     command: >
@@ -156,7 +163,7 @@ services:
   w3_engine_4:
     <<: *engine-template
     environment:
-      - RPC=${ETH_RPC_URL}
+      - RPC=${MINER_4_ETH_RPC_URL}
   miner_4:
     <<: *miner-template
     command: >
@@ -172,7 +179,7 @@ services:
   w3_engine_5:
     <<: *engine-template
     environment:
-      - RPC=${ETH_RPC_URL}
+      - RPC=${MINER_5_ETH_RPC_URL}
   miner_5:
     <<: *miner-template
     command: >
@@ -188,7 +195,7 @@ services:
   w3_engine_6:
     <<: *engine-template
     environment:
-      - RPC=${ETH_RPC_URL}
+      - RPC=${MINER_6_ETH_RPC_URL}
   miner_6:
     <<: *miner-template
     command: >
@@ -204,7 +211,7 @@ services:
   w3_engine_7:
     <<: *engine-template
     environment:
-      - RPC=${ETH_RPC_URL}
+      - RPC=${MINER_7_ETH_RPC_URL}
   miner_7:
     <<: *miner-template
     command: >
@@ -220,7 +227,7 @@ services:
   w3_engine_8:
     <<: *engine-template
     environment:
-      - RPC=${ETH_RPC_URL}
+      - RPC=${MINER_8_ETH_RPC_URL}
   miner_8:
     <<: *miner-template
     command: >
@@ -236,7 +243,7 @@ services:
   w3_engine_9:
     <<: *engine-template
     environment:
-      - RPC=${ETH_RPC_URL}
+      - RPC=${MINER_9_ETH_RPC_URL}
   miner_9:
     <<: *miner-template
     command: >
@@ -252,7 +259,7 @@ services:
   w3_engine_10:
     <<: *engine-template
     environment:
-      - RPC=${ETH_RPC_URL}
+      - RPC=${MINER_10_ETH_RPC_URL}
   miner_10:
     <<: *miner-template
     command: >

@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.22-bookworm AS builder
+FROM golang:1.25-alpine3.22 AS builder
 
 WORKDIR /app
 
@@ -14,7 +14,7 @@ COPY engines/w3/ ./
 RUN CGO_ENABLED=0 GOOS=linux go build -o w3-engine cmd/main.go
 
 # Final stage
-FROM debian:bookworm-slim
+FROM alpine:3.22
 
 WORKDIR /app
 

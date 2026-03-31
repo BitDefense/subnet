@@ -1,33 +1,26 @@
-# Use a multi-stage build with uv
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 
 WORKDIR /app
 
-# Install dependencies separately to leverage Docker cache
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --frozen --no-install-project --no-dev
 
-# Copy the rest of the application
-ADD . /app
+COPY platform_service /app/platform_service
+COPY template /app/template
 
-# Final stage
 FROM python:3.12-slim-bookworm
 
 WORKDIR /app
 
-# Copy the environment from the builder
 COPY --from=builder /app /app
 
-# Set environment variables
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app"
 
-# Expose port 8000
 EXPOSE 8000
 
-# Start the Platform service
 ENTRYPOINT ["python", "-m", "platform_service.main"]
